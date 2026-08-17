@@ -10,23 +10,33 @@ const listUsers = TryCatch(async (req, res) => {
   const sortOrder = req.query.sort_order || 'desc';
   const search = req.query.search;
 
+  if (!search || search.trim() === '') {
+    return res.status(200).json({
+      success: true,
+      data: [],
+      pagination: {
+        page,
+        limit,
+        total: 0,
+        total_pages: 0,
+      },
+    });
+  }
+
   const offset = (page - 1) * limit;
   const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
 
   const base = db('users');
 
-  if (search) {
-    const term = `%${search}%`;
-    // utf8mb4_ci makes LIKE case-insensitive on typical MySQL setups
-    base.where((builder) => {
-      builder
-        .where('username', 'like', term)
-        .orWhere('mobile', 'like', term)
-        .orWhere('email', 'like', term)
-        .orWhere('first_name', 'like', term)
-        .orWhere('last_name', 'like', term)
-    });
-  }
+  const term = `%${search}%`;
+  base.where((builder) => {
+    builder
+      .where('username', 'like', term)
+      .orWhere('mobile', 'like', term)
+      .orWhere('email', 'like', term)
+      .orWhere('first_name', 'like', term)
+      .orWhere('last_name', 'like', term)
+  });
 
   const countRow = await base.clone().count({ total: '*' }).first();
   const total = Number(countRow.total) || 0;
