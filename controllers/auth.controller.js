@@ -161,6 +161,8 @@ const completeProfile = TryCatch(async (req, res) => {
   const token = signAccessToken({ sub: updated.id });
 
   const data = {
+    is_new_user: true,
+    profile_complete: true,
     token,
     token_type: 'Bearer',
     user: toPublicUser(updated),
