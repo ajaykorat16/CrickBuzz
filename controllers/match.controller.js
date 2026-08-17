@@ -16,6 +16,22 @@ async function createMatch(req, res, next) {
       throw new ErrorHandler('Both teams must exist, be active, and belong to you', 400);
     }
     
+    // Check if there are common players in both teams
+    const teamAPlayers = await db('team_players').where({ team_id: team_a_id, is_active: true }).pluck('user_id');
+    const teamBPlayers = await db('team_players').where({ team_id: team_b_id, is_active: true }).pluck('user_id');
+    
+    const commonPlayers = teamAPlayers.filter(id => teamBPlayers.includes(id));
+    
+    if (commonPlayers.length > 0) {
+      const commonUsers = await db('users').whereIn('id', commonPlayers);
+      const userNames = commonUsers.map(u => `'${(`${u.first_name || ''} ${u.last_name || ''}`.trim() || u.username)}'`).join(', ');
+      
+      const isMultiple = commonPlayers.length > 1;
+      const message = `Match cannot be created because the following ${isMultiple ? 'players are' : 'player is'} active in both teams: ${userNames}. A player cannot play against themselves.`;
+      
+      throw new ErrorHandler(message, 400);
+    }
+    
     const [id] = await db('matches').insert({
       created_by: req.user.id,
       team_a_id,
