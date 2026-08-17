@@ -141,11 +141,22 @@ async function addPlayer(req, res, next) {
       throw new ErrorHandler('User is already an active member of this team', 400);
     }
 
+    if (is_captain) {
+      const existingCaptain = await db('team_players').where({ team_id: team.id, is_active: true, is_captain: true }).first();
+      if (existingCaptain) throw new ErrorHandler('Team already has a captain', 400);
+    }
+
+    if (is_vice_captain) {
+      const existingViceCaptain = await db('team_players').where({ team_id: team.id, is_active: true, is_vice_captain: true }).first();
+      if (existingViceCaptain) throw new ErrorHandler('Team already has a vice captain', 400);
+    }
+
     const [id] = await db('team_players').insert({
       team_id: team.id,
       user_id: player.id,
       is_captain: is_captain || false,
       is_vice_captain: is_vice_captain || false,
+      playing_role: req.body.playing_role || null,
       jersey_number,
       is_active: true,
     });
@@ -169,7 +180,7 @@ async function getTeamPlayers(req, res, next) {
     const players = await db('team_players')
       .join('users', 'team_players.user_id', '=', 'users.id')
       .where({ 'team_players.team_id': team.id, 'team_players.is_active': true })
-      .select('users.id', 'users.first_name', 'users.last_name', 'users.username', 'team_players.is_captain', 'team_players.is_vice_captain', 'team_players.jersey_number', 'team_players.joined_at');
+      .select('users.id', 'users.first_name', 'users.last_name', 'users.username', 'team_players.is_captain', 'team_players.is_vice_captain', 'team_players.playing_role', 'team_players.jersey_number', 'team_players.joined_at');
 
     res.json({ success: true, data: players });
   } catch (err) {
@@ -193,11 +204,22 @@ async function updateTeamPlayer(req, res, next) {
 
     if (!teamPlayer) throw new ErrorHandler('User not found in this team', 404);
 
+    if (is_captain && !teamPlayer.is_captain) {
+      const existingCaptain = await db('team_players').where({ team_id: team.id, is_active: true, is_captain: true }).first();
+      if (existingCaptain) throw new ErrorHandler('Team already has a captain', 400);
+    }
+
+    if (is_vice_captain && !teamPlayer.is_vice_captain) {
+      const existingViceCaptain = await db('team_players').where({ team_id: team.id, is_active: true, is_vice_captain: true }).first();
+      if (existingViceCaptain) throw new ErrorHandler('Team already has a vice captain', 400);
+    }
+
     await db('team_players')
       .where({ id: teamPlayer.id })
       .update({
         is_captain: is_captain !== undefined ? is_captain : teamPlayer.is_captain,
         is_vice_captain: is_vice_captain !== undefined ? is_vice_captain : teamPlayer.is_vice_captain,
+        playing_role: req.body.playing_role !== undefined ? req.body.playing_role : teamPlayer.playing_role,
         jersey_number: jersey_number !== undefined ? jersey_number : teamPlayer.jersey_number,
         is_active: is_active !== undefined ? is_active : teamPlayer.is_active,
         left_at: is_active === false ? db.fn.now() : teamPlayer.left_at,

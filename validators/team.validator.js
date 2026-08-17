@@ -23,6 +23,7 @@ const addPlayer = [
   body('user_id').isInt().withMessage('user_id is required').toInt(),
   body('is_captain').optional().isBoolean().toBoolean(),
   body('is_vice_captain').optional().isBoolean().toBoolean(),
+  body('playing_role').optional({ nullable: true }).isIn(['Batter', 'Bowler', 'All-Rounder', 'Wicket-Keeper']).withMessage('Invalid playing role'),
   body('jersey_number').optional().trim().isLength({ max: 20 }),
 ];
 
@@ -31,6 +32,7 @@ const updateTeamPlayer = [
   param('userId').isInt().withMessage('Invalid user ID').toInt(),
   body('is_captain').optional().isBoolean().toBoolean(),
   body('is_vice_captain').optional().isBoolean().toBoolean(),
+  body('playing_role').optional({ nullable: true }).isIn(['Batter', 'Bowler', 'All-Rounder', 'Wicket-Keeper']).withMessage('Invalid playing role'),
   body('jersey_number').optional().trim().isLength({ max: 20 }),
   body('is_active').optional().isBoolean().toBoolean(),
 ];
