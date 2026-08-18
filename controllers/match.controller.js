@@ -64,15 +64,15 @@ async function getMatches(req, res, next) {
     const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
 
     const userTeams = await db('team_players').where({ user_id: req.user.id, is_active: true }).pluck('team_id');
-    const scoredMatches = await db('match_scorers').where({ user_id: req.user.id }).pluck('match_id');
+    const adminMatches = await db('match_admins').where({ user_id: req.user.id }).pluck('match_id');
 
     const base = db('matches')
       .whereNull('deleted_at')
-      .andWhere(function() {
+      .andWhere(function () {
         this.where('created_by', req.user.id)
-            .orWhereIn('team_a_id', userTeams)
-            .orWhereIn('team_b_id', userTeams)
-            .orWhereIn('id', scoredMatches);
+          .orWhereIn('team_a_id', userTeams)
+          .orWhereIn('team_b_id', userTeams)
+          .orWhereIn('id', adminMatches);
       });
 
     if (status) {
@@ -83,8 +83,8 @@ async function getMatches(req, res, next) {
       const term = `%${search}%`;
       base.where((builder) => {
         builder.where('city', 'like', term)
-               .orWhere('venue', 'like', term)
-               .orWhere('match_type', 'like', term);
+          .orWhere('venue', 'like', term)
+          .orWhere('match_type', 'like', term);
       });
     }
 
@@ -134,11 +134,16 @@ async function getMatch(req, res, next) {
 async function updateMatch(req, res, next) {
   try {
     const match = await db('matches')
-      .where({ id: req.params.id, created_by: req.user.id })
+      .where({ id: req.params.id })
       .whereNull('deleted_at')
       .first();
 
     if (!match) throw new ErrorHandler('Match not found', 404);
+
+    if (match.created_by !== req.user.id) {
+      const isAdmin = await db('match_admins').where({ match_id: match.id, user_id: req.user.id }).first();
+      if (!isAdmin) throw new ErrorHandler('Unauthorized to update this match details', 403);
+    }
 
     const {
       status,
@@ -204,7 +209,16 @@ async function deleteMatch(req, res, next) {
   }
 }
 
-async function addScorer(req, res, next) {
+/**
+ * Grants admin permission to a user for a specific match.
+ * Match Admins are allowed to update the scoreboard and match details.
+ * Only the original match owner can assign admins.
+ * 
+ * @param {Object} req - Express request object containing match ID and user ID
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function addMatchAdmin(req, res, next) {
   try {
     const matchId = req.params.id;
     const { user_id } = req.body;
@@ -219,34 +233,32 @@ async function addScorer(req, res, next) {
     const userToAdd = await db('users').where({ id: user_id }).first();
     if (!userToAdd) throw new ErrorHandler('User not found', 404);
 
-    // Ensure the new scorer is NOT a player in either team
-    const isPlayerInTeams = await db('team_players')
-      .whereIn('team_id', [match.team_a_id, match.team_b_id])
-      .andWhere({ user_id: user_id, is_active: true })
-      .first();
-
-    if (isPlayerInTeams) {
-      throw new ErrorHandler('Scorer must be a neutral user outside of both participating teams', 400);
-    }
-
-    // Check if already a scorer
-    const existing = await db('match_scorers').where({ match_id: matchId, user_id }).first();
+    // Check if already an admin
+    const existing = await db('match_admins').where({ match_id: matchId, user_id }).first();
     if (existing) {
-      return res.status(200).json({ success: true, message: 'User is already a scorer for this match' });
+      return res.status(200).json({ success: true, message: 'User is already a match admin for this match' });
     }
 
-    await db('match_scorers').insert({
+    await db('match_admins').insert({
       match_id: matchId,
       user_id
     });
 
-    res.status(201).json({ success: true, message: 'Scorer added successfully' });
+    res.status(201).json({ success: true, message: 'Match Admin added successfully' });
   } catch (err) {
     next(err);
   }
 }
 
-async function removeScorer(req, res, next) {
+/**
+ * Revokes admin permission from a user for a specific match.
+ * Only the original match owner can perform this action.
+ * 
+ * @param {Object} req - Express request object containing match ID and user ID
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function removeMatchAdmin(req, res, next) {
   try {
     const matchId = req.params.id;
     const { user_id } = req.body;
@@ -258,15 +270,23 @@ async function removeScorer(req, res, next) {
 
     if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
 
-    await db('match_scorers').where({ match_id: matchId, user_id }).del();
+    await db('match_admins').where({ match_id: matchId, user_id }).del();
 
-    res.json({ success: true, message: 'Scorer removed successfully' });
+    res.json({ success: true, message: 'Match Admin removed successfully' });
   } catch (err) {
     next(err);
   }
 }
 
-async function getScorers(req, res, next) {
+/**
+ * Fetches a paginated list of all users who have been granted admin permission for the match.
+ * Supports searching and sorting.
+ * 
+ * @param {Object} req - Express request object containing match ID and query parameters
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function getMatchAdmins(req, res, next) {
   try {
     const matchId = req.params.id;
     const page = parseInt(req.query.page, 10) || 1;
@@ -282,10 +302,143 @@ async function getScorers(req, res, next) {
     const authorized = await isAuthorizedViewer(matchId, req.user.id);
     if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
 
-    const base = db('match_scorers')
-      .join('users', 'match_scorers.user_id', '=', 'users.id')
-      .where('match_scorers.match_id', matchId)
-      .select('users.id', 'users.username', 'users.email', 'users.avatar', 'match_scorers.created_at');
+    const base = db('match_admins')
+      .join('users', 'match_admins.user_id', '=', 'users.id')
+      .where('match_admins.match_id', matchId)
+      .select('users.id', 'users.username', 'users.email', 'match_admins.created_at');
+
+    if (search && search.trim() !== '') {
+      const term = `%${search}%`;
+      base.andWhere((builder) => {
+        builder.where('users.username', 'like', term)
+          .orWhere('users.email', 'like', term);
+      });
+    }
+
+    const countRow = await base.clone().clearSelect().count({ total: '*' }).first();
+    const total = Number(countRow.total) || 0;
+
+    let orderField = sortBy;
+    if (sortBy === 'created_at') orderField = 'match_admins.created_at';
+    else if (sortBy === 'username') orderField = 'users.username';
+
+    const admins = await base
+      .clone()
+      .orderBy(orderField, order)
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      success: true,
+      data: admins,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 0,
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Grants viewer permission to a user for a specific match.
+ * Match Viewers can see live scores and match details but cannot make updates.
+ * Only the original match owner can add viewers.
+ * 
+ * @param {Object} req - Express request object containing match ID and user ID
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function addViewer(req, res, next) {
+  try {
+    const matchId = req.params.id;
+    const { user_id } = req.body;
+
+    const match = await db('matches')
+      .where({ id: matchId, created_by: req.user.id })
+      .whereNull('deleted_at')
+      .first();
+
+    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+
+    const userToAdd = await db('users').where({ id: user_id }).first();
+    if (!userToAdd) throw new ErrorHandler('User not found', 404);
+
+    const existing = await db('match_viewers').where({ match_id: matchId, user_id }).first();
+    if (existing) {
+      return res.status(200).json({ success: true, message: 'User is already a viewer for this match' });
+    }
+
+    await db('match_viewers').insert({
+      match_id: matchId,
+      user_id
+    });
+
+    res.status(201).json({ success: true, message: 'Viewer added successfully' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Revokes viewer permission from a user for a specific match.
+ * Only the original match owner can perform this action.
+ * 
+ * @param {Object} req - Express request object containing match ID and user ID
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function removeViewer(req, res, next) {
+  try {
+    const matchId = req.params.id;
+    const { user_id } = req.body;
+
+    const match = await db('matches')
+      .where({ id: matchId, created_by: req.user.id })
+      .whereNull('deleted_at')
+      .first();
+
+    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+
+    await db('match_viewers').where({ match_id: matchId, user_id }).del();
+
+    res.json({ success: true, message: 'Viewer removed successfully' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * Fetches a paginated list of all users who have been granted explicit viewer permission.
+ * Supports searching and sorting.
+ * 
+ * @param {Object} req - Express request object containing match ID and query parameters
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+async function getViewers(req, res, next) {
+  try {
+    const matchId = req.params.id;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const sortBy = req.query.sort_by || 'created_at';
+    const sortOrder = req.query.sort_order || 'desc';
+    const search = req.query.search;
+
+    const offset = (page - 1) * limit;
+    const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const { isAuthorizedViewer } = require('../helpers/scoreboard');
+    const authorized = await isAuthorizedViewer(matchId, req.user.id);
+    if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
+
+    const base = db('match_viewers')
+      .join('users', 'match_viewers.user_id', '=', 'users.id')
+      .where('match_viewers.match_id', matchId)
+      .select('users.id', 'users.username', 'users.email', 'match_viewers.created_at');
 
     if (search && search.trim() !== '') {
       const term = `%${search}%`;
@@ -299,10 +452,10 @@ async function getScorers(req, res, next) {
     const total = Number(countRow.total) || 0;
 
     let orderField = sortBy;
-    if (sortBy === 'created_at') orderField = 'match_scorers.created_at';
+    if (sortBy === 'created_at') orderField = 'match_viewers.created_at';
     else if (sortBy === 'username') orderField = 'users.username';
 
-    const scorers = await base
+    const viewers = await base
       .clone()
       .orderBy(orderField, order)
       .limit(limit)
@@ -310,7 +463,7 @@ async function getScorers(req, res, next) {
 
     res.json({
       success: true,
-      data: scorers,
+      data: viewers,
       pagination: {
         page,
         limit,
@@ -329,7 +482,10 @@ module.exports = {
   getMatch,
   updateMatch,
   deleteMatch,
-  addScorer,
-  removeScorer,
-  getScorers
+  addMatchAdmin,
+  removeMatchAdmin,
+  getMatchAdmins,
+  addViewer,
+  removeViewer,
+  getViewers
 };

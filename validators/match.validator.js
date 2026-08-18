@@ -29,11 +29,19 @@ const updateMatch = [
 module.exports = {
   createMatch,
   updateMatch,
-  addScorer: [
+  addMatchAdmin: [
     param('id').isInt().withMessage('Invalid match ID').toInt(),
     body('user_id').isInt().withMessage('User ID is required').toInt()
   ],
-  removeScorer: [
+  removeMatchAdmin: [
+    param('id').isInt().withMessage('Invalid match ID').toInt(),
+    body('user_id').isInt().withMessage('User ID is required').toInt()
+  ],
+  addViewer: [
+    param('id').isInt().withMessage('Invalid match ID').toInt(),
+    body('user_id').isInt().withMessage('User ID is required').toInt()
+  ],
+  removeViewer: [
     param('id').isInt().withMessage('Invalid match ID').toInt(),
     body('user_id').isInt().withMessage('User ID is required').toInt()
   ]

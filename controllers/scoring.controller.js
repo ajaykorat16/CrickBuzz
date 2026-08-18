@@ -29,8 +29,8 @@ async function startInnings(req, res, next) {
     if (!match) throw new ErrorHandler('Match not found', 404);
     
     if (match.created_by !== userId) {
-      const isScorer = await db('match_scorers').where({ match_id: matchId, user_id: userId }).first();
-      if (!isScorer) throw new ErrorHandler('Unauthorized to score this match', 403);
+      const isAdmin = await db('match_admins').where({ match_id: matchId, user_id: userId }).first();
+      if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
     }
     
     if (striker_id === non_striker_id) {
@@ -136,8 +136,8 @@ async function recordDelivery(req, res, next) {
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
       if (match.created_by !== userId) {
-        const isScorer = await trx('match_scorers').where({ match_id: match.id, user_id: userId }).first();
-        if (!isScorer) throw new ErrorHandler('Unauthorized to score this match', 403);
+        const isAdmin = await trx('match_admins').where({ match_id: match.id, user_id: userId }).first();
+        if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
       }
       
       // Strict Over Limit Validation
@@ -355,8 +355,8 @@ async function setNextPlayers(req, res, next) {
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
       if (match.created_by !== userId) {
-        const isScorer = await trx('match_scorers').where({ match_id: match.id, user_id: userId }).first();
-        if (!isScorer) throw new ErrorHandler('Unauthorized to score this match', 403);
+        const isAdmin = await trx('match_admins').where({ match_id: match.id, user_id: userId }).first();
+        if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
       }
       
       // Strict Over Limit Validation

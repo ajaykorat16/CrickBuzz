@@ -9,6 +9,10 @@ const router = express.Router();
 
 router.use(authenticate, requireAccessToken);
 
+// ==========================================
+// MATCH MANAGEMENT (CRUD)
+// ==========================================
+
 router.post(
   '/',
   matchValidator.createMatch,
@@ -38,23 +42,50 @@ router.delete(
   matchController.deleteMatch
 );
 
+// ==========================================
+// MATCH ADMINS (Update Permissions)
+// ==========================================
+
 router.post(
-  '/:id/scorers',
-  matchValidator.addScorer,
+  '/:id/admins',
+  matchValidator.addMatchAdmin,
   validate,
-  matchController.addScorer
+  matchController.addMatchAdmin
 );
 
 router.get(
-  '/:id/scorers',
-  matchController.getScorers
+  '/:id/admins',
+  matchController.getMatchAdmins
 );
 
 router.delete(
-  '/:id/scorers',
-  matchValidator.removeScorer,
+  '/:id/admins',
+  matchValidator.removeMatchAdmin,
   validate,
-  matchController.removeScorer
+  matchController.removeMatchAdmin
+);
+
+// ==========================================
+// MATCH VIEWERS (View-Only Permissions)
+// ==========================================
+
+router.post(
+  '/:id/viewers',
+  matchValidator.addViewer,
+  validate,
+  matchController.addViewer
+);
+
+router.get(
+  '/:id/viewers',
+  matchController.getViewers
+);
+
+router.delete(
+  '/:id/viewers',
+  matchValidator.removeViewer,
+  validate,
+  matchController.removeViewer
 );
 
 module.exports = router;
