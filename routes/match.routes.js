@@ -45,6 +45,11 @@ router.post(
   matchController.addScorer
 );
 
+router.get(
+  '/:id/scorers',
+  matchController.getScorers
+);
+
 router.delete(
   '/:id/scorers',
   matchValidator.removeScorer,

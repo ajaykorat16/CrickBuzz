@@ -266,6 +266,63 @@ async function removeScorer(req, res, next) {
   }
 }
 
+async function getScorers(req, res, next) {
+  try {
+    const matchId = req.params.id;
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const sortBy = req.query.sort_by || 'created_at';
+    const sortOrder = req.query.sort_order || 'desc';
+    const search = req.query.search;
+
+    const offset = (page - 1) * limit;
+    const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const { isAuthorizedViewer } = require('../helpers/scoreboard');
+    const authorized = await isAuthorizedViewer(matchId, req.user.id);
+    if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
+
+    const base = db('match_scorers')
+      .join('users', 'match_scorers.user_id', '=', 'users.id')
+      .where('match_scorers.match_id', matchId)
+      .select('users.id', 'users.username', 'users.email', 'users.avatar', 'match_scorers.created_at');
+
+    if (search && search.trim() !== '') {
+      const term = `%${search}%`;
+      base.andWhere((builder) => {
+        builder.where('users.username', 'like', term)
+               .orWhere('users.email', 'like', term);
+      });
+    }
+
+    const countRow = await base.clone().clearSelect().count({ total: '*' }).first();
+    const total = Number(countRow.total) || 0;
+
+    let orderField = sortBy;
+    if (sortBy === 'created_at') orderField = 'match_scorers.created_at';
+    else if (sortBy === 'username') orderField = 'users.username';
+
+    const scorers = await base
+      .clone()
+      .orderBy(orderField, order)
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      success: true,
+      data: scorers,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 0,
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createMatch,
   getMatches,
@@ -273,5 +330,6 @@ module.exports = {
   updateMatch,
   deleteMatch,
   addScorer,
-  removeScorer
+  removeScorer,
+  getScorers
 };
