@@ -19,7 +19,7 @@ async function startInnings(req, res, next) {
   try {
     const matchId = req.params.id;
     const userId = req.user.id;
-    const { batting_team_id, bowling_team_id, striker_id, non_striker_id, bowler_id } = req.body;
+    const { batting_team_id, bowling_team_id, striker_id, non_striker_id, bowler_id, toss_winner_team_id, toss_decision } = req.body;
 
     const match = await db('matches')
       .where({ id: matchId, created_by: userId })
@@ -40,6 +40,10 @@ async function startInnings(req, res, next) {
         ![match.team_a_id, match.team_b_id].includes(bowling_team_id) ||
         batting_team_id === bowling_team_id) {
       throw new ErrorHandler('Invalid batting/bowling teams for this match', 400);
+    }
+
+    if (toss_winner_team_id && ![match.team_a_id, match.team_b_id].includes(toss_winner_team_id)) {
+      throw new ErrorHandler('Invalid toss winner team. Must be one of the playing teams.', 400);
     }
 
     const result = await db.transaction(async (trx) => {
@@ -63,10 +67,17 @@ async function startInnings(req, res, next) {
         status: 'IN_PROGRESS'
       });
 
-      await trx('matches').where({ id: matchId }).update({
+      const matchUpdatePayload = {
         current_innings_id: inningsId,
         status: 'LIVE'
-      });
+      };
+
+      if (inningsNumber === 1 && toss_winner_team_id && toss_decision) {
+        matchUpdatePayload.toss_winner_team_id = toss_winner_team_id;
+        matchUpdatePayload.toss_decision = toss_decision;
+      }
+
+      await trx('matches').where({ id: matchId }).update(matchUpdatePayload);
 
       await trx('innings_state').insert({
         innings_id: inningsId,
@@ -120,6 +131,11 @@ async function recordDelivery(req, res, next) {
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
       if (match.created_by !== userId) throw new ErrorHandler('Unauthorized to score this match', 403);
+      
+      // Strict Over Limit Validation
+      if (match.overs && innings.total_legal_balls >= match.overs * 6) {
+        throw new ErrorHandler(`All ${match.overs} overs for this match have already been bowled. You cannot add any more deliveries.`, 400);
+      }
 
       const state = await trx('innings_state').where({ innings_id: inningsId }).first();
       let currentOver = await trx('overs')
@@ -297,6 +313,11 @@ async function setNextPlayers(req, res, next) {
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
       if (match.created_by !== userId) throw new ErrorHandler('Unauthorized', 403);
+      
+      // Strict Over Limit Validation
+      if (match.overs && innings.total_legal_balls >= match.overs * 6) {
+        throw new ErrorHandler(`All ${match.overs} overs for this match have already been bowled. You cannot start a new over.`, 400);
+      }
       
       const state = await trx('innings_state').where({ innings_id: inningsId }).first();
       

@@ -7,6 +7,8 @@ const startInnings = [
   body('striker_id').isInt().withMessage('striker_id is required').toInt(),
   body('non_striker_id').isInt().withMessage('non_striker_id is required').toInt(),
   body('bowler_id').isInt().withMessage('bowler_id is required').toInt(),
+  body('toss_winner_team_id').optional({ nullable: true }).isInt().toInt(),
+  body('toss_decision').optional({ nullable: true }).isIn(['BAT', 'BOWL']).withMessage('toss_decision must be BAT or BOWL'),
 ];
 
 const recordDelivery = [
