@@ -38,4 +38,18 @@ router.delete(
   matchController.deleteMatch
 );
 
+router.post(
+  '/:id/scorers',
+  matchValidator.addScorer,
+  validate,
+  matchController.addScorer
+);
+
+router.delete(
+  '/:id/scorers',
+  matchValidator.removeScorer,
+  validate,
+  matchController.removeScorer
+);
+
 module.exports = router;

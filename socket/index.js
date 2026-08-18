@@ -67,10 +67,18 @@ function initSocket(server) {
      * Subscribes the user to a specific match's live score updates.
      * Expected Payload: { "match_id": 4 } (or just the raw ID integer for backward compatibility)
      */
-    socket.on('match:join', (payload) => {
+    socket.on('match:join', async (payload) => {
       // Support both object payloads and raw integers
       const matchId = payload && typeof payload === 'object' ? payload.match_id : payload;
       if (!matchId) return;
+      
+      const { isAuthorizedViewer } = require('../helpers/scoreboard');
+      const authorized = await isAuthorizedViewer(matchId, socket.user.id);
+      
+      if (!authorized) {
+        socket.emit('error', { message: 'Unauthorized to view this match' });
+        return;
+      }
       
       // Use Socket.IO 'Rooms' to isolate users by match
       socket.join(`match:${matchId}`);

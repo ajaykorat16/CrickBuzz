@@ -22,11 +22,16 @@ async function startInnings(req, res, next) {
     const { batting_team_id, bowling_team_id, striker_id, non_striker_id, bowler_id, toss_winner_team_id, toss_decision } = req.body;
 
     const match = await db('matches')
-      .where({ id: matchId, created_by: userId })
+      .where({ id: matchId })
       .whereNull('deleted_at')
       .first();
 
-    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+    if (!match) throw new ErrorHandler('Match not found', 404);
+    
+    if (match.created_by !== userId) {
+      const isScorer = await db('match_scorers').where({ match_id: matchId, user_id: userId }).first();
+      if (!isScorer) throw new ErrorHandler('Unauthorized to score this match', 403);
+    }
     
     if (striker_id === non_striker_id) {
       throw new ErrorHandler('Striker and non-striker cannot be the same player', 400);
@@ -130,7 +135,10 @@ async function recordDelivery(req, res, next) {
       if (innings.status === 'COMPLETED') throw new ErrorHandler('Innings already completed', 400);
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
-      if (match.created_by !== userId) throw new ErrorHandler('Unauthorized to score this match', 403);
+      if (match.created_by !== userId) {
+        const isScorer = await trx('match_scorers').where({ match_id: match.id, user_id: userId }).first();
+        if (!isScorer) throw new ErrorHandler('Unauthorized to score this match', 403);
+      }
       
       // Strict Over Limit Validation
       if (match.overs && innings.total_legal_balls >= match.overs * 6) {
@@ -319,6 +327,10 @@ async function recordDelivery(req, res, next) {
 async function getLiveScoreboard(req, res, next) {
   try {
     const matchId = req.params.id;
+    const { isAuthorizedViewer } = require('../helpers/scoreboard');
+    const authorized = await isAuthorizedViewer(matchId, req.user.id);
+    if (!authorized) throw new ErrorHandler('Unauthorized to view this match scoreboard', 403);
+
     const scoreboard = await getScoreboard(matchId);
     res.json({ success: true, data: scoreboard });
   } catch (err) {
@@ -342,7 +354,10 @@ async function setNextPlayers(req, res, next) {
       if (!innings || innings.status === 'COMPLETED') throw new ErrorHandler('Invalid innings', 400);
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
-      if (match.created_by !== userId) throw new ErrorHandler('Unauthorized', 403);
+      if (match.created_by !== userId) {
+        const isScorer = await trx('match_scorers').where({ match_id: match.id, user_id: userId }).first();
+        if (!isScorer) throw new ErrorHandler('Unauthorized to score this match', 403);
+      }
       
       // Strict Over Limit Validation
       if (match.overs && innings.total_legal_balls >= match.overs * 6) {
@@ -403,6 +418,10 @@ async function setNextPlayers(req, res, next) {
 async function getScorecard(req, res, next) {
   try {
     const matchId = req.params.id;
+    const { isAuthorizedViewer } = require('../helpers/scoreboard');
+    const authorized = await isAuthorizedViewer(matchId, req.user.id);
+    if (!authorized) throw new ErrorHandler('Unauthorized to view this match scorecard', 403);
+
     const match = await db('matches').where({ id: matchId }).first();
     if (!match) throw new ErrorHandler('Match not found', 404);
     

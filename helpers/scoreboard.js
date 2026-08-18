@@ -135,6 +135,26 @@ async function getScoreboard(matchId, transaction = null) {
   };
 }
 
+async function isAuthorizedViewer(matchId, userId) {
+  const match = await db('matches').where({ id: matchId }).first();
+  if (!match) return false;
+  
+  if (match.created_by === userId) return true;
+  
+  const isScorer = await db('match_scorers').where({ match_id: matchId, user_id: userId }).first();
+  if (isScorer) return true;
+  
+  const isPlayer = await db('team_players')
+    .whereIn('team_id', [match.team_a_id, match.team_b_id])
+    .andWhere({ user_id: userId, is_active: true })
+    .first();
+    
+  if (isPlayer) return true;
+  
+  return false;
+}
+
 module.exports = {
-  getScoreboard
+  getScoreboard,
+  isAuthorizedViewer
 };

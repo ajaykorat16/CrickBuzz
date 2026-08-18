@@ -63,9 +63,17 @@ async function getMatches(req, res, next) {
     const offset = (page - 1) * limit;
     const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
 
+    const userTeams = await db('team_players').where({ user_id: req.user.id, is_active: true }).pluck('team_id');
+    const scoredMatches = await db('match_scorers').where({ user_id: req.user.id }).pluck('match_id');
+
     const base = db('matches')
-      .where({ created_by: req.user.id })
-      .whereNull('deleted_at');
+      .whereNull('deleted_at')
+      .andWhere(function() {
+        this.where('created_by', req.user.id)
+            .orWhereIn('team_a_id', userTeams)
+            .orWhereIn('team_b_id', userTeams)
+            .orWhereIn('id', scoredMatches);
+      });
 
     if (status) {
       base.where('status', status);
@@ -106,8 +114,12 @@ async function getMatches(req, res, next) {
 
 async function getMatch(req, res, next) {
   try {
+    const { isAuthorizedViewer } = require('../helpers/scoreboard');
+    const authorized = await isAuthorizedViewer(req.params.id, req.user.id);
+    if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
+
     const match = await db('matches')
-      .where({ id: req.params.id, created_by: req.user.id })
+      .where({ id: req.params.id })
       .whereNull('deleted_at')
       .first();
 
@@ -192,10 +204,74 @@ async function deleteMatch(req, res, next) {
   }
 }
 
+async function addScorer(req, res, next) {
+  try {
+    const matchId = req.params.id;
+    const { user_id } = req.body;
+
+    const match = await db('matches')
+      .where({ id: matchId, created_by: req.user.id })
+      .whereNull('deleted_at')
+      .first();
+
+    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+
+    const userToAdd = await db('users').where({ id: user_id }).first();
+    if (!userToAdd) throw new ErrorHandler('User not found', 404);
+
+    // Ensure the new scorer is NOT a player in either team
+    const isPlayerInTeams = await db('team_players')
+      .whereIn('team_id', [match.team_a_id, match.team_b_id])
+      .andWhere({ user_id: user_id, is_active: true })
+      .first();
+
+    if (isPlayerInTeams) {
+      throw new ErrorHandler('Scorer must be a neutral user outside of both participating teams', 400);
+    }
+
+    // Check if already a scorer
+    const existing = await db('match_scorers').where({ match_id: matchId, user_id }).first();
+    if (existing) {
+      return res.status(200).json({ success: true, message: 'User is already a scorer for this match' });
+    }
+
+    await db('match_scorers').insert({
+      match_id: matchId,
+      user_id
+    });
+
+    res.status(201).json({ success: true, message: 'Scorer added successfully' });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function removeScorer(req, res, next) {
+  try {
+    const matchId = req.params.id;
+    const { user_id } = req.body;
+
+    const match = await db('matches')
+      .where({ id: matchId, created_by: req.user.id })
+      .whereNull('deleted_at')
+      .first();
+
+    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+
+    await db('match_scorers').where({ match_id: matchId, user_id }).del();
+
+    res.json({ success: true, message: 'Scorer removed successfully' });
+  } catch (err) {
+    next(err);
+  }
+}
+
 module.exports = {
   createMatch,
   getMatches,
   getMatch,
   updateMatch,
   deleteMatch,
+  addScorer,
+  removeScorer
 };
