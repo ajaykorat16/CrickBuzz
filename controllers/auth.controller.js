@@ -7,12 +7,14 @@ const { normalizeMobile } = require('../helpers/mobile');
 const { generateOtp } = require('../helpers/otp');
 const { toPublicUser } = require('../helpers/user');
 const { isUsernameTaken, suggestUsernames: buildUsernames } = require('../helpers/username');
-const smsService = require('../services/sms.service');
+const smsHelper = require('../helpers/sms');
 const { TryCatch, ErrorHandler } = require('../middleware/error.middleware');
 
 /**
  * POST /api/auth/send-otp
- * Generates OTP locally and stores in DB. SMS sending is currently paused.
+ * 
+ * Generates a random 6-digit OTP and "sends" it to the user's mobile number.
+ * In development mode, the OTP is returned in the response for easy testing.
  */
 const sendOtp = TryCatch(async (req, res) => {
   const phone = normalizeMobile(req.body.mobile);
@@ -31,7 +33,7 @@ const sendOtp = TryCatch(async (req, res) => {
   });
 
   // Call the SMS service (currently abstracted/paused)
-  await smsService.sendOtpSms(phone, otp);
+  await smsHelper.sendOtpSms(phone, otp);
 
   let devOtp = null;
   if (config.otp.devMode) {
@@ -54,7 +56,11 @@ const sendOtp = TryCatch(async (req, res) => {
 
 /**
  * POST /api/auth/verify-otp
- * Returns an access token if the profile is complete, otherwise a profile_token.
+ * 
+ * Validates the OTP against the database session.
+ * - If the user is new (profile incomplete), it returns a short-lived profile_token.
+ * - If the user exists (profile complete), it returns a standard long-lived access_token.
+ * Note: The access_token is the one required for Socket.IO connections.
  */
 const verifyOtp = TryCatch(async (req, res) => {
   const phone = normalizeMobile(req.body.mobile);
@@ -123,7 +129,9 @@ const verifyOtp = TryCatch(async (req, res) => {
 
 /**
  * POST /api/auth/complete-profile
- * Requires profile_token. Auto-generates username when omitted.
+ * 
+ * Final step of registration. Takes the profile_token (from verifyOtp) and user details
+ * to create their profile. Upgrades their profile_token into a full access_token.
  */
 const completeProfile = TryCatch(async (req, res) => {
   const user = req.user;

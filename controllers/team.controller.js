@@ -33,11 +33,48 @@ async function createTeam(req, res, next) {
 
 async function getTeams(req, res, next) {
   try {
-    const teams = await db('teams')
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const sortBy = req.query.sort_by || 'created_at';
+    const sortOrder = req.query.sort_order || 'desc';
+    const search = req.query.search;
+
+    const offset = (page - 1) * limit;
+    const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const base = db('teams')
       .where({ owner_id: req.user.id })
       .whereNull('deleted_at');
+
+    if (search && search.trim() !== '') {
+      const term = `%${search}%`;
+      base.where((builder) => {
+        builder.where('name', 'like', term)
+               .orWhere('short_name', 'like', term)
+               .orWhere('city', 'like', term);
+      });
+    }
+
+    const countRow = await base.clone().count({ total: '*' }).first();
+    const total = Number(countRow.total) || 0;
+
+    const teams = await base
+      .clone()
+      .orderBy(sortBy, order)
+      .limit(limit)
+      .offset(offset);
+      
     const formattedTeams = teams.map(t => formatTeam(req, t));
-    res.json({ success: true, data: formattedTeams });
+    res.json({
+      success: true,
+      data: formattedTeams,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 0,
+      }
+    });
   } catch (err) {
     next(err);
   }

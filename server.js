@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,7 +10,12 @@ const {
   notFoundHandler,
   errorMiddleware,
 } = require('./middleware/error.middleware');
+const { initSocket } = require('./socket');
 const app = express();
+const server = http.createServer(app);
+
+// Initialize Socket.IO
+initSocket(server);
 
 app.use(helmet());
 app.use(cors());
@@ -32,7 +38,7 @@ async function start() {
     process.exit(1);
   }
 
-  app.listen(config.port, () => {
+  server.listen(config.port, () => {
     console.log(`Server listening on port ${config.port} (${config.env})`);
   });
 }

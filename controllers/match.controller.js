@@ -53,10 +53,52 @@ async function createMatch(req, res, next) {
 
 async function getMatches(req, res, next) {
   try {
-    const matches = await db('matches')
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const sortBy = req.query.sort_by || 'created_at';
+    const sortOrder = req.query.sort_order || 'desc';
+    const status = req.query.status;
+    const search = req.query.search;
+
+    const offset = (page - 1) * limit;
+    const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
+
+    const base = db('matches')
       .where({ created_by: req.user.id })
       .whereNull('deleted_at');
-    res.json({ success: true, data: matches });
+
+    if (status) {
+      base.where('status', status);
+    }
+
+    if (search && search.trim() !== '') {
+      const term = `%${search}%`;
+      base.where((builder) => {
+        builder.where('city', 'like', term)
+               .orWhere('venue', 'like', term)
+               .orWhere('match_type', 'like', term);
+      });
+    }
+
+    const countRow = await base.clone().count({ total: '*' }).first();
+    const total = Number(countRow.total) || 0;
+
+    const matches = await base
+      .clone()
+      .orderBy(sortBy, order)
+      .limit(limit)
+      .offset(offset);
+
+    res.json({
+      success: true,
+      data: matches,
+      pagination: {
+        page,
+        limit,
+        total,
+        total_pages: Math.ceil(total / limit) || 0,
+      }
+    });
   } catch (err) {
     next(err);
   }
