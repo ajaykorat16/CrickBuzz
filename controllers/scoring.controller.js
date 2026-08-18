@@ -154,7 +154,6 @@ async function recordDelivery(req, res, next) {
         is_wicket = false,
         wicket_type = null,
         dismissed_player_id = null,
-        is_boundary = false,
         is_four = false,
         is_six = false
       } = data;
@@ -182,7 +181,6 @@ async function recordDelivery(req, res, next) {
         dismissed_player_id,
         is_legal_delivery: legalDelivery,
         is_wicket,
-        is_boundary,
         is_four,
         is_six
       });

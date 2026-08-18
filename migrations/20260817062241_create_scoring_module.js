@@ -82,7 +82,6 @@ exports.up = async function(knex) {
     
     table.boolean('is_legal_delivery').notNullable().defaultTo(true);
     table.boolean('is_wicket').notNullable().defaultTo(false);
-    table.boolean('is_boundary').notNullable().defaultTo(false); // Can be 4 or 6, or false
     table.boolean('is_four').notNullable().defaultTo(false);
     table.boolean('is_six').notNullable().defaultTo(false);
     

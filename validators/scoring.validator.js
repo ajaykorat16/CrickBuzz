@@ -19,7 +19,6 @@ const recordDelivery = [
   body('is_wicket').optional().isBoolean().toBoolean(),
   body('wicket_type').optional({ nullable: true }).isString(),
   body('dismissed_player_id').optional({ nullable: true }).isInt().toInt(),
-  body('is_boundary').optional().isBoolean().toBoolean(),
   body('is_four').optional().isBoolean().toBoolean(),
   body('is_six').optional().isBoolean().toBoolean(),
 ];
