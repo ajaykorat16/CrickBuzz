@@ -208,11 +208,39 @@ async function recordDelivery(req, res, next) {
 
       if (newTotalWickets === 10 || (match.overs && newTotalLegalBalls >= match.overs * 6)) {
         inningsCompleted = true;
+        if (innings.innings_number === 2) {
+          matchCompleted = true;
+          matchStatus = 'COMPLETED';
+        }
       }
+      
+      // If batting second and target is reached, match is over immediately
       if (innings.target_runs && newTotalRuns >= innings.target_runs) {
         inningsCompleted = true;
         matchCompleted = true;
         matchStatus = 'COMPLETED';
+      }
+      
+      let winner_team_id = null;
+      let result_type = null;
+      let result_description = null;
+
+      if (matchCompleted) {
+        const target = innings.target_runs;
+        if (newTotalRuns >= target) {
+          winner_team_id = innings.batting_team_id;
+          result_type = 'WON';
+          const winTeam = await trx('teams').where({ id: winner_team_id }).first();
+          result_description = `${winTeam.name} won by ${10 - newTotalWickets} wickets`;
+        } else if (newTotalRuns === target - 1) {
+          result_type = 'TIE';
+          result_description = 'Match Tied';
+        } else {
+          winner_team_id = innings.bowling_team_id;
+          result_type = 'WON';
+          const winTeam = await trx('teams').where({ id: winner_team_id }).first();
+          result_description = `${winTeam.name} won by ${(target - 1) - newTotalRuns} runs`;
+        }
       }
 
       await trx('innings').where({ id: inningsId }).update({
@@ -225,9 +253,13 @@ async function recordDelivery(req, res, next) {
       });
 
       if (inningsCompleted || matchCompleted) {
-        await trx('matches').where({ id: match.id }).update({
-          status: matchStatus
-        });
+        const matchUpdate = { status: matchStatus };
+        if (matchCompleted) {
+          matchUpdate.winner_team_id = winner_team_id;
+          matchUpdate.result_type = result_type;
+          matchUpdate.result_description = result_description;
+        }
+        await trx('matches').where({ id: match.id }).update(matchUpdate);
       }
 
       let nextStriker = state.striker_id;
