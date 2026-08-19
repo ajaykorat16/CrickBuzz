@@ -50,7 +50,7 @@ function initSocket(server) {
 
       // Verify and decode token, attaching the user object to the socket for future use
       const decoded = jwt.verify(token, config.jwt.secret);
-      socket.user = decoded;
+      socket.user = { ...decoded, id: decoded.sub || decoded.id };
       next();
     } catch (err) {
       // Catches JWT malformed, expired, or invalid signature errors
