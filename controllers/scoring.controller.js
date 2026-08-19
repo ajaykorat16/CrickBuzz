@@ -310,7 +310,12 @@ const recordDelivery = TryCatch(async (req, res, next) => {
         io.to(`match:${match.id}`).emit('innings:completed', { inningsId });
       }
       if (matchCompleted) {
-        io.to(`match:${match.id}`).emit('match:completed', { matchId: match.id });
+        io.to(`match:${match.id}`).emit('match:completed', { 
+          matchId: match.id,
+          winner_team_id,
+          result_type,
+          result_description
+        });
       }
       
       // Fetch the freshly updated scoreboard payload

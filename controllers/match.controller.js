@@ -170,6 +170,21 @@ const updateMatch = TryCatch(async (req, res, next) => {
     });
 
     const updated = await db('matches').where({ id: match.id }).first();
+    
+    // Broadcast manual updates to connected clients
+    const { getIO } = require('../socket');
+    const io = getIO();
+    io.to(`match:${match.id}`).emit('match:updated', updated);
+    
+    if (updated.status === 'COMPLETED' && match.status !== 'COMPLETED') {
+      io.to(`match:${match.id}`).emit('match:completed', { 
+        matchId: updated.id,
+        winner_team_id: updated.winner_team_id,
+        result_type: updated.result_type,
+        result_description: updated.result_description
+      });
+    }
+
     res.json({ success: true, data: updated });
   });
 
