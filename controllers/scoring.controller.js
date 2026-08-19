@@ -27,7 +27,7 @@ const startInnings = TryCatch(async (req, res, next) => {
 
     if (!match) throw new ErrorHandler('Match not found', 404);
     
-    if (match.created_by !== userId) {
+    if (String(match.created_by) !== String(userId)) {
       const isAdmin = await db('match_admins').where({ match_id: matchId, user_id: userId }).first();
       if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
     }
@@ -143,7 +143,7 @@ const recordDelivery = TryCatch(async (req, res, next) => {
       if (innings.status === 'COMPLETED') throw new ErrorHandler('Innings already completed', 400);
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
-      if (match.created_by !== userId) {
+      if (String(match.created_by) !== String(userId)) {
         const isAdmin = await trx('match_admins').where({ match_id: match.id, user_id: userId }).first();
         if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
       }
@@ -359,7 +359,7 @@ const setNextPlayers = TryCatch(async (req, res, next) => {
       if (!innings || innings.status === 'COMPLETED') throw new ErrorHandler('Invalid innings', 400);
 
       const match = await trx('matches').where({ id: innings.match_id }).first();
-      if (match.created_by !== userId) {
+      if (String(match.created_by) !== String(userId)) {
         const isAdmin = await trx('match_admins').where({ match_id: match.id, user_id: userId }).first();
         if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
       }

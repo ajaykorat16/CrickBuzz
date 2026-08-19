@@ -139,7 +139,7 @@ async function isAuthorizedViewer(matchId, userId) {
   const match = await db('matches').where({ id: matchId }).first();
   if (!match) return false;
   
-  if (match.created_by === userId) return true;
+  if (String(match.created_by) === String(userId)) return true;
   
   const isAdmin = await db('match_admins').where({ match_id: matchId, user_id: userId }).first();
   if (isAdmin) return true;

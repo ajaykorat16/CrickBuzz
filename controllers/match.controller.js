@@ -127,7 +127,7 @@ const updateMatch = TryCatch(async (req, res, next) => {
 
     if (!match) throw new ErrorHandler('Match not found', 404);
 
-    if (match.created_by !== req.user.id) {
+    if (String(match.created_by) !== String(req.user.id)) {
       const isAdmin = await db('match_admins').where({ match_id: match.id, user_id: req.user.id }).first();
       if (!isAdmin) throw new ErrorHandler('Unauthorized to update this match details', 403);
     }
