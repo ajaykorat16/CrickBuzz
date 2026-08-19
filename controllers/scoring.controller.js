@@ -46,6 +46,19 @@ const startInnings = TryCatch(async (req, res, next) => {
       throw new ErrorHandler('Invalid batting/bowling teams for this match', 400);
     }
 
+    const battingTeamPlayers = await db('team_players').where({ team_id: batting_team_id, is_active: true }).pluck('user_id');
+    const bowlingTeamPlayers = await db('team_players').where({ team_id: bowling_team_id, is_active: true }).pluck('user_id');
+
+    if (!battingTeamPlayers.includes(striker_id)) {
+      throw new ErrorHandler('Striker must be a player of the batting team', 400);
+    }
+    if (!battingTeamPlayers.includes(non_striker_id)) {
+      throw new ErrorHandler('Non-striker must be a player of the batting team', 400);
+    }
+    if (!bowlingTeamPlayers.includes(bowler_id)) {
+      throw new ErrorHandler('Bowler must be a player of the bowling team', 400);
+    }
+
     if (toss_winner_team_id && ![match.team_a_id, match.team_b_id].includes(toss_winner_team_id)) {
       throw new ErrorHandler('Invalid toss winner team. Must be one of the playing teams.', 400);
     }
@@ -362,6 +375,23 @@ const setNextPlayers = TryCatch(async (req, res, next) => {
       }
       if (finalBowler && (finalBowler === finalStriker || finalBowler === finalNonStriker)) {
         throw new ErrorHandler('Bowler cannot be the same as the striker or non-striker', 400);
+      }
+
+      if (striker_id || non_striker_id) {
+        const battingTeamPlayers = await trx('team_players').where({ team_id: innings.batting_team_id, is_active: true }).pluck('user_id');
+        if (striker_id && !battingTeamPlayers.includes(striker_id)) {
+          throw new ErrorHandler('Striker must be a player of the batting team', 400);
+        }
+        if (non_striker_id && !battingTeamPlayers.includes(non_striker_id)) {
+          throw new ErrorHandler('Non-striker must be a player of the batting team', 400);
+        }
+      }
+
+      if (bowler_id) {
+        const bowlingTeamPlayers = await trx('team_players').where({ team_id: innings.bowling_team_id, is_active: true }).pluck('user_id');
+        if (!bowlingTeamPlayers.includes(bowler_id)) {
+          throw new ErrorHandler('Bowler must be a player of the bowling team', 400);
+        }
       }
 
       const updatePayload = { updated_at: trx.fn.now() };
