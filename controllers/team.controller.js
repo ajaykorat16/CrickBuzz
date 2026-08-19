@@ -1,5 +1,5 @@
 const { db } = require('../config/database');
-const { ErrorHandler } = require('../middleware/error.middleware');
+const { ErrorHandler, TryCatch } = require('../middleware/error.middleware');
 
 const formatTeam = (req, team) => {
   if (team && team.logo && !team.logo.startsWith('http')) {
@@ -8,8 +8,7 @@ const formatTeam = (req, team) => {
   return team;
 };
 
-async function createTeam(req, res, next) {
-  try {
+const createTeam = TryCatch(async (req, res, next) => {
     const { name, short_name, city, description } = req.body;
     let logo = req.body.logo;
     if (req.file) {
@@ -26,13 +25,9 @@ async function createTeam(req, res, next) {
 
     const team = await db('teams').where({ id }).first();
     res.status(201).json({ success: true, data: formatTeam(req, team) });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function getTeams(req, res, next) {
-  try {
+const getTeams = TryCatch(async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const sortBy = req.query.sort_by || 'created_at';
@@ -75,13 +70,9 @@ async function getTeams(req, res, next) {
         total_pages: Math.ceil(total / limit) || 0,
       }
     });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function getTeam(req, res, next) {
-  try {
+const getTeam = TryCatch(async (req, res, next) => {
     const team = await db('teams')
       .where({ id: req.params.id, owner_id: req.user.id })
       .whereNull('deleted_at')
@@ -92,13 +83,9 @@ async function getTeam(req, res, next) {
     }
 
     res.json({ success: true, data: formatTeam(req, team) });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function updateTeam(req, res, next) {
-  try {
+const updateTeam = TryCatch(async (req, res, next) => {
     const { name, short_name, city, description, is_active } = req.body;
     let logo = req.body.logo;
     if (req.file) {
@@ -125,13 +112,9 @@ async function updateTeam(req, res, next) {
 
     const updatedTeam = await db('teams').where({ id: team.id }).first();
     res.json({ success: true, data: formatTeam(req, updatedTeam) });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function deleteTeam(req, res, next) {
-  try {
+const deleteTeam = TryCatch(async (req, res, next) => {
     const team = await db('teams')
       .where({ id: req.params.id, owner_id: req.user.id })
       .whereNull('deleted_at')
@@ -147,13 +130,9 @@ async function deleteTeam(req, res, next) {
     });
 
     res.json({ success: true, message: 'Team deleted successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function addPlayer(req, res, next) {
-  try {
+const addPlayer = TryCatch(async (req, res, next) => {
     const { user_id, is_captain, is_vice_captain, jersey_number } = req.body;
 
     const team = await db('teams')
@@ -200,13 +179,9 @@ async function addPlayer(req, res, next) {
 
     const teamPlayer = await db('team_players').where({ id }).first();
     res.status(201).json({ success: true, data: teamPlayer });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function getTeamPlayers(req, res, next) {
-  try {
+const getTeamPlayers = TryCatch(async (req, res, next) => {
     const team = await db('teams')
       .where({ id: req.params.id, owner_id: req.user.id })
       .whereNull('deleted_at')
@@ -220,13 +195,9 @@ async function getTeamPlayers(req, res, next) {
       .select('users.id', 'users.first_name', 'users.last_name', 'users.username', 'team_players.is_captain', 'team_players.is_vice_captain', 'team_players.playing_role', 'team_players.jersey_number', 'team_players.joined_at');
 
     res.json({ success: true, data: players });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function updateTeamPlayer(req, res, next) {
-  try {
+const updateTeamPlayer = TryCatch(async (req, res, next) => {
     const { is_captain, is_vice_captain, jersey_number, is_active } = req.body;
 
     const team = await db('teams')
@@ -265,13 +236,9 @@ async function updateTeamPlayer(req, res, next) {
 
     const updated = await db('team_players').where({ id: teamPlayer.id }).first();
     res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function removeTeamPlayer(req, res, next) {
-  try {
+const removeTeamPlayer = TryCatch(async (req, res, next) => {
     const team = await db('teams')
       .where({ id: req.params.id, owner_id: req.user.id })
       .first();
@@ -293,10 +260,7 @@ async function removeTeamPlayer(req, res, next) {
       });
 
     res.json({ success: true, message: 'Player removed from team' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 module.exports = {
   createTeam,

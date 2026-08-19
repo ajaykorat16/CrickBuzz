@@ -1,4 +1,4 @@
-const { ErrorHandler } = require('../middleware/error.middleware');
+const { ErrorHandler, TryCatch } = require('../middleware/error.middleware');
 const { db } = require('../config/database');
 const { getIO } = require('../socket');
 const {
@@ -15,8 +15,7 @@ const { getScoreboard } = require('../helpers/scoreboard');
  * Validates teams and players, creates DB records for the innings, initial state, and first over.
  * Broadcasts 'innings:started' and 'scoreboard:update' socket events.
  */
-async function startInnings(req, res, next) {
-  try {
+const startInnings = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const userId = req.user.id;
     const { batting_team_id, bowling_team_id, striker_id, non_striker_id, bowler_id, toss_winner_team_id, toss_decision } = req.body;
@@ -111,10 +110,7 @@ async function startInnings(req, res, next) {
     });
 
     res.status(201).json({ success: true, data: result });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Records a single delivery (ball).
@@ -123,8 +119,7 @@ async function startInnings(req, res, next) {
  * tracks player stats, and handles wickets/over completion.
  * Broadcasts 'delivery:recorded', 'scoreboard:update' and optionally 'innings/match:completed'.
  */
-async function recordDelivery(req, res, next) {
-  try {
+const recordDelivery = TryCatch(async (req, res, next) => {
     const inningsId = req.params.id;
     const userId = req.user.id;
     const data = req.body;
@@ -315,17 +310,13 @@ async function recordDelivery(req, res, next) {
     });
 
     res.status(201).json(result);
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Fetches the current live scoreboard for a match via REST API.
  * (Useful for initial load before WebSocket events start arriving).
  */
-async function getLiveScoreboard(req, res, next) {
-  try {
+const getLiveScoreboard = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { isAuthorizedViewer } = require('../helpers/scoreboard');
     const authorized = await isAuthorizedViewer(matchId, req.user.id);
@@ -333,18 +324,14 @@ async function getLiveScoreboard(req, res, next) {
 
     const scoreboard = await getScoreboard(matchId);
     res.json({ success: true, data: scoreboard });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Assigns the next striker, non-striker, or bowler.
  * Typically called after a wicket falls or at the end of an over.
  * Broadcasts the updated scoreboard to reflect the new players on pitch.
  */
-async function setNextPlayers(req, res, next) {
-  try {
+const setNextPlayers = TryCatch(async (req, res, next) => {
     const inningsId = req.params.id;
     const userId = req.user.id;
     const { striker_id, non_striker_id, bowler_id } = req.body;
@@ -406,17 +393,13 @@ async function setNextPlayers(req, res, next) {
     });
 
     res.json(result);
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Generates the full detailed scorecard for a completed or ongoing match.
  * Includes batting stats, bowling figures, and fall of wickets (FOW).
  */
-async function getScorecard(req, res, next) {
-  try {
+const getScorecard = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { isAuthorizedViewer } = require('../helpers/scoreboard');
     const authorized = await isAuthorizedViewer(matchId, req.user.id);
@@ -519,10 +502,7 @@ async function getScorecard(req, res, next) {
     }
 
     res.json({ success: true, data: scorecardData });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 module.exports = {
   startInnings,

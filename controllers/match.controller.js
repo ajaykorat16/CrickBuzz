@@ -1,8 +1,7 @@
 const { db } = require('../config/database');
-const { ErrorHandler } = require('../middleware/error.middleware');
+const { ErrorHandler, TryCatch } = require('../middleware/error.middleware');
 
-async function createMatch(req, res, next) {
-  try {
+const createMatch = TryCatch(async (req, res, next) => {
     const { team_a_id, team_b_id, match_type, overs, venue, city, scheduled_date, scheduled_time } = req.body;
 
     if (team_a_id === team_b_id) {
@@ -46,13 +45,9 @@ async function createMatch(req, res, next) {
 
     const match = await db('matches').where({ id }).first();
     res.status(201).json({ success: true, data: match });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function getMatches(req, res, next) {
-  try {
+const getMatches = TryCatch(async (req, res, next) => {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
     const sortBy = req.query.sort_by || 'created_at';
@@ -107,13 +102,9 @@ async function getMatches(req, res, next) {
         total_pages: Math.ceil(total / limit) || 0,
       }
     });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function getMatch(req, res, next) {
-  try {
+const getMatch = TryCatch(async (req, res, next) => {
     const { isAuthorizedViewer } = require('../helpers/scoreboard');
     const authorized = await isAuthorizedViewer(req.params.id, req.user.id);
     if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
@@ -126,13 +117,9 @@ async function getMatch(req, res, next) {
     if (!match) throw new ErrorHandler('Match not found', 404);
 
     res.json({ success: true, data: match });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function updateMatch(req, res, next) {
-  try {
+const updateMatch = TryCatch(async (req, res, next) => {
     const match = await db('matches')
       .where({ id: req.params.id })
       .whereNull('deleted_at')
@@ -184,13 +171,9 @@ async function updateMatch(req, res, next) {
 
     const updated = await db('matches').where({ id: match.id }).first();
     res.json({ success: true, data: updated });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
-async function deleteMatch(req, res, next) {
-  try {
+const deleteMatch = TryCatch(async (req, res, next) => {
     const match = await db('matches')
       .where({ id: req.params.id, created_by: req.user.id })
       .whereNull('deleted_at')
@@ -204,10 +187,7 @@ async function deleteMatch(req, res, next) {
     });
 
     res.json({ success: true, message: 'Match deleted successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Grants admin permission to a user for a specific match.
@@ -218,8 +198,7 @@ async function deleteMatch(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-async function addMatchAdmin(req, res, next) {
-  try {
+const addMatchAdmin = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
 
@@ -245,10 +224,7 @@ async function addMatchAdmin(req, res, next) {
     });
 
     res.status(201).json({ success: true, message: 'Match Admin added successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Revokes admin permission from a user for a specific match.
@@ -258,8 +234,7 @@ async function addMatchAdmin(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-async function removeMatchAdmin(req, res, next) {
-  try {
+const removeMatchAdmin = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
 
@@ -273,10 +248,7 @@ async function removeMatchAdmin(req, res, next) {
     await db('match_admins').where({ match_id: matchId, user_id }).del();
 
     res.json({ success: true, message: 'Match Admin removed successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Fetches a paginated list of all users who have been granted admin permission for the match.
@@ -286,8 +258,7 @@ async function removeMatchAdmin(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-async function getMatchAdmins(req, res, next) {
-  try {
+const getMatchAdmins = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
@@ -338,10 +309,7 @@ async function getMatchAdmins(req, res, next) {
         total_pages: Math.ceil(total / limit) || 0,
       }
     });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Grants viewer permission to a user for a specific match.
@@ -352,8 +320,7 @@ async function getMatchAdmins(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-async function addViewer(req, res, next) {
-  try {
+const addViewer = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
 
@@ -378,10 +345,7 @@ async function addViewer(req, res, next) {
     });
 
     res.status(201).json({ success: true, message: 'Viewer added successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Revokes viewer permission from a user for a specific match.
@@ -391,8 +355,7 @@ async function addViewer(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-async function removeViewer(req, res, next) {
-  try {
+const removeViewer = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
 
@@ -406,10 +369,7 @@ async function removeViewer(req, res, next) {
     await db('match_viewers').where({ match_id: matchId, user_id }).del();
 
     res.json({ success: true, message: 'Viewer removed successfully' });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 /**
  * Fetches a paginated list of all users who have been granted explicit viewer permission.
@@ -419,8 +379,7 @@ async function removeViewer(req, res, next) {
  * @param {Object} res - Express response object
  * @param {Function} next - Express next middleware function
  */
-async function getViewers(req, res, next) {
-  try {
+const getViewers = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 10;
@@ -471,10 +430,7 @@ async function getViewers(req, res, next) {
         total_pages: Math.ceil(total / limit) || 0,
       }
     });
-  } catch (err) {
-    next(err);
-  }
-}
+  });
 
 module.exports = {
   createMatch,
