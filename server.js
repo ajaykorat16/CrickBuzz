@@ -10,6 +10,7 @@ const {
   notFoundHandler,
   errorMiddleware,
 } = require('./middleware/error.middleware');
+const { dateFormattingMiddleware } = require('./middleware/date.middleware');
 const { initSocket } = require('./socket');
 const app = express();
 const server = http.createServer(app);
@@ -22,6 +23,9 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Apply global date formatting to all JSON responses
+app.use(dateFormattingMiddleware);
 
 app.use('/api', routes);
 

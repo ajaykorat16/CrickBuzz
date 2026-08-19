@@ -26,23 +26,31 @@ const updateMatch = [
   body('scheduled_time').optional({ checkFalsy: true }).matches(/^([01]\d|2[0-3]):?([0-5]\d)(:?([0-5]\d))?$/),
 ];
 
+const addMatchAdmin = [
+  param('id').isInt().withMessage('Invalid match ID').toInt(),
+  body('user_id').isInt().withMessage('User ID is required').toInt()
+];
+
+const removeMatchAdmin = [
+  param('id').isInt().withMessage('Invalid match ID').toInt(),
+  body('user_id').isInt().withMessage('User ID is required').toInt()
+];
+
+const addViewer = [
+  param('id').isInt().withMessage('Invalid match ID').toInt(),
+  body('user_id').isInt().withMessage('User ID is required').toInt()
+];
+
+const removeViewer = [
+  param('id').isInt().withMessage('Invalid match ID').toInt(),
+  body('user_id').isInt().withMessage('User ID is required').toInt()
+];
+
 module.exports = {
   createMatch,
   updateMatch,
-  addMatchAdmin: [
-    param('id').isInt().withMessage('Invalid match ID').toInt(),
-    body('user_id').isInt().withMessage('User ID is required').toInt()
-  ],
-  removeMatchAdmin: [
-    param('id').isInt().withMessage('Invalid match ID').toInt(),
-    body('user_id').isInt().withMessage('User ID is required').toInt()
-  ],
-  addViewer: [
-    param('id').isInt().withMessage('Invalid match ID').toInt(),
-    body('user_id').isInt().withMessage('User ID is required').toInt()
-  ],
-  removeViewer: [
-    param('id').isInt().withMessage('Invalid match ID').toInt(),
-    body('user_id').isInt().withMessage('User ID is required').toInt()
-  ]
+  addMatchAdmin,
+  removeMatchAdmin,
+  addViewer,
+  removeViewer
 };
