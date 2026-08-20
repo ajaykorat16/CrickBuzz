@@ -111,17 +111,7 @@ const getMatch = TryCatch(async (req, res, next) => {
   });
 
 const updateMatch = TryCatch(async (req, res, next) => {
-    const match = await db('matches')
-      .where({ id: req.params.id })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found', 404);
-
-    if (String(match.created_by) !== String(req.user.id)) {
-      const isAdmin = await db('match_admins').where({ match_id: match.id, user_id: req.user.id }).first();
-      if (!isAdmin) throw new ErrorHandler('Unauthorized to update this match details', 403);
-    }
+    const match = req.match;
 
     const {
       status,
@@ -207,13 +197,7 @@ const deleteMatch = TryCatch(async (req, res, next) => {
 const addMatchAdmin = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
-
-    const match = await db('matches')
-      .where({ id: matchId, created_by: req.user.id })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+    const match = req.match;
 
     const userToAdd = await db('users').where({ id: user_id }).first();
     if (!userToAdd) throw new ErrorHandler('User not found', 404);
@@ -243,13 +227,7 @@ const addMatchAdmin = TryCatch(async (req, res, next) => {
 const removeMatchAdmin = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
-
-    const match = await db('matches')
-      .where({ id: matchId, created_by: req.user.id })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+    const match = req.match;
 
     await db('match_admins').where({ match_id: matchId, user_id }).del();
 
@@ -325,13 +303,7 @@ const getMatchAdmins = TryCatch(async (req, res, next) => {
 const addViewer = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
-
-    const match = await db('matches')
-      .where({ id: matchId, created_by: req.user.id })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+    const match = req.match;
 
     const userToAdd = await db('users').where({ id: user_id }).first();
     if (!userToAdd) throw new ErrorHandler('User not found', 404);
@@ -360,13 +332,7 @@ const addViewer = TryCatch(async (req, res, next) => {
 const removeViewer = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
     const { user_id } = req.body;
-
-    const match = await db('matches')
-      .where({ id: matchId, created_by: req.user.id })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found or unauthorized', 404);
+    const match = req.match;
 
     await db('match_viewers').where({ match_id: matchId, user_id }).del();
 

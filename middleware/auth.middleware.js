@@ -71,7 +71,7 @@ const requireMatchAdmin = (idType = 'match') => {
 
       if (String(match.created_by) !== String(userId)) {
         const isAdmin = await db('match_admins').where({ match_id: matchId, user_id: userId }).first();
-        if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
+        if (!isAdmin) throw new ErrorHandler('Unauthorized to manage this match', 403);
       }
 
       req.match = match;

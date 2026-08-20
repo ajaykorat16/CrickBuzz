@@ -3,7 +3,7 @@ const express = require('express');
 const matchController = require('../controllers/match.controller');
 const matchValidator = require('../validators/match.validator');
 const validate = require('../middleware/validate.middleware');
-const { authenticate, requireAccessToken, requireMatchViewer } = require('../middleware/auth.middleware');
+const { authenticate, requireAccessToken, requireMatchViewer, requireMatchAdmin } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -33,6 +33,7 @@ router.get(
 
 router.put(
   '/:id',
+  requireMatchAdmin('match'),
   matchValidator.updateMatch,
   validate,
   matchController.updateMatch
@@ -49,6 +50,7 @@ router.delete(
 
 router.post(
   '/:id/admins',
+  requireMatchAdmin('match'),
   matchValidator.addMatchAdmin,
   validate,
   matchController.addMatchAdmin
@@ -62,6 +64,7 @@ router.get(
 
 router.delete(
   '/:id/admins',
+  requireMatchAdmin('match'),
   matchValidator.removeMatchAdmin,
   validate,
   matchController.removeMatchAdmin
@@ -73,6 +76,7 @@ router.delete(
 
 router.post(
   '/:id/viewers',
+  requireMatchAdmin('match'),
   matchValidator.addViewer,
   validate,
   matchController.addViewer
@@ -86,6 +90,7 @@ router.get(
 
 router.delete(
   '/:id/viewers',
+  requireMatchAdmin('match'),
   matchValidator.removeViewer,
   validate,
   matchController.removeViewer
