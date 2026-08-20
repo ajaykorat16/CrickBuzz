@@ -1,6 +1,7 @@
 const { db } = require('../config/database');
 const { ErrorHandler } = require('./error.middleware');
 const { verifyToken } = require('../helpers/jwt');
+const { isAuthorizedViewer } = require('../helpers/scoreboard');
 /** Verifies Bearer JWT and attaches `req.user` / `req.auth`. */
 async function authenticate(req, res, next) {
   try {
@@ -91,22 +92,7 @@ const requireMatchViewer = async (req, res, next) => {
     const match = await db('matches').where({ id: matchId }).whereNull('deleted_at').first();
     if (!match) throw new ErrorHandler('Match not found', 404);
 
-    let authorized = false;
-    
-    if (String(match.created_by) === String(userId)) {
-      authorized = true;
-    } else if (await db('match_admins').where({ match_id: matchId, user_id: userId }).first()) {
-      authorized = true;
-    } else if (await db('match_viewers').where({ match_id: matchId, user_id: userId }).first()) {
-      authorized = true;
-    } else if (
-      await db('team_players')
-        .whereIn('team_id', [match.team_a_id, match.team_b_id])
-        .andWhere({ user_id: userId, is_active: true })
-        .first()
-    ) {
-      authorized = true;
-    }
+    const authorized = await isAuthorizedViewer(matchId, userId);
 
     if (!authorized) {
       throw new ErrorHandler('Unauthorized to view this match scoreboard', 403);
