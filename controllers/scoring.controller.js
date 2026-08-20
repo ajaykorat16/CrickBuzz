@@ -547,26 +547,25 @@ const undoLastDelivery = TryCatch(async (req, res, next) => {
       // Delete the delivery
       await trx('deliveries').where({ id: lastDelivery.id }).del();
 
-      // Update the over
+      // Update the over (never delete it, even if it has 0 balls)
       const isLegal = lastDelivery.is_legal_delivery;
       const runsToSubtract = lastDelivery.total_runs;
       const wicketsToSubtract = lastDelivery.is_wicket ? 1 : 0;
       
       const newLegalBalls = over.legal_balls - (isLegal ? 1 : 0);
       
-      const deliveriesLeftInOver = await trx('deliveries').where({ over_id: over.id }).count({ count: '*' }).first();
-      
-      if (Number(deliveriesLeftInOver.count) === 0) {
-        // Over is completely empty now, we can delete it
-        await trx('overs').where({ id: over.id }).del();
-      } else {
-        await trx('overs').where({ id: over.id }).update({
-          runs: over.runs - runsToSubtract,
-          wickets: over.wickets - wicketsToSubtract,
-          legal_balls: newLegalBalls,
-          status: 'IN_PROGRESS'
-        });
-      }
+      await trx('overs').where({ id: over.id }).update({
+        runs: over.runs - runsToSubtract,
+        wickets: over.wickets - wicketsToSubtract,
+        legal_balls: newLegalBalls,
+        status: 'IN_PROGRESS'
+      });
+
+      // Delete any future empty overs that were created but had no deliveries yet
+      await trx('overs')
+        .where({ innings_id: inningsId })
+        .andWhere('over_number', '>', over.over_number)
+        .del();
 
       // Update innings
       const newTotalRuns = innings.total_runs - runsToSubtract;
