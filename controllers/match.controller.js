@@ -105,16 +105,7 @@ const getMatches = TryCatch(async (req, res, next) => {
   });
 
 const getMatch = TryCatch(async (req, res, next) => {
-    const { isAuthorizedViewer } = require('../helpers/scoreboard');
-    const authorized = await isAuthorizedViewer(req.params.id, req.user.id);
-    if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
-
-    const match = await db('matches')
-      .where({ id: req.params.id })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found', 404);
+    const match = req.match;
 
     res.json({ success: true, data: match });
   });
@@ -284,10 +275,6 @@ const getMatchAdmins = TryCatch(async (req, res, next) => {
     const offset = (page - 1) * limit;
     const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
 
-    const { isAuthorizedViewer } = require('../helpers/scoreboard');
-    const authorized = await isAuthorizedViewer(matchId, req.user.id);
-    if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
-
     const base = db('match_admins')
       .join('users', 'match_admins.user_id', '=', 'users.id')
       .where('match_admins.match_id', matchId)
@@ -404,10 +391,6 @@ const getViewers = TryCatch(async (req, res, next) => {
 
     const offset = (page - 1) * limit;
     const order = String(sortOrder).toLowerCase() === 'asc' ? 'asc' : 'desc';
-
-    const { isAuthorizedViewer } = require('../helpers/scoreboard');
-    const authorized = await isAuthorizedViewer(matchId, req.user.id);
-    if (!authorized) throw new ErrorHandler('Match not found or unauthorized', 404);
 
     const base = db('match_viewers')
       .join('users', 'match_viewers.user_id', '=', 'users.id')

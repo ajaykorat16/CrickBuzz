@@ -3,7 +3,7 @@ const express = require('express');
 const matchController = require('../controllers/match.controller');
 const matchValidator = require('../validators/match.validator');
 const validate = require('../middleware/validate.middleware');
-const { authenticate, requireAccessToken } = require('../middleware/auth.middleware');
+const { authenticate, requireAccessToken, requireMatchViewer } = require('../middleware/auth.middleware');
 
 const router = express.Router();
 
@@ -27,6 +27,7 @@ router.get(
 
 router.get(
   '/:id',
+  requireMatchViewer,
   matchController.getMatch
 );
 
@@ -55,6 +56,7 @@ router.post(
 
 router.get(
   '/:id/admins',
+  requireMatchViewer,
   matchController.getMatchAdmins
 );
 
@@ -78,6 +80,7 @@ router.post(
 
 router.get(
   '/:id/viewers',
+  requireMatchViewer,
   matchController.getViewers
 );
 

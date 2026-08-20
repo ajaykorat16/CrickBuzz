@@ -88,7 +88,7 @@ const requireMatchViewer = async (req, res, next) => {
     const userId = req.user.id;
     const matchId = req.params.id;
 
-    const match = await db('matches').where({ id: matchId }).first();
+    const match = await db('matches').where({ id: matchId }).whereNull('deleted_at').first();
     if (!match) throw new ErrorHandler('Match not found', 404);
 
     let authorized = false;
