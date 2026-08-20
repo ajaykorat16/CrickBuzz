@@ -68,21 +68,26 @@ function initSocket(server) {
      * Expected Payload: { "match_id": 4 } (or just the raw ID integer for backward compatibility)
      */
     socket.on('match:join', async (payload) => {
-      // Support both object payloads and raw integers
-      const matchId = payload && typeof payload === 'object' ? payload.match_id : payload;
-      if (!matchId) return;
-      
-      const { isAuthorizedViewer } = require('../helpers/scoreboard');
-      const authorized = await isAuthorizedViewer(matchId, socket.user.id);
-      
-      if (!authorized) {
-        socket.emit('error', { message: 'Unauthorized to view this match' });
-        return;
+      try {
+        // Support both object payloads and raw integers
+        const matchId = payload && typeof payload === 'object' ? payload.match_id : payload;
+        if (!matchId) return;
+        
+        const { isAuthorizedViewer } = require('../helpers/scoreboard');
+        const authorized = await isAuthorizedViewer(matchId, socket.user.id);
+        
+        if (!authorized) {
+          socket.emit('match:error', { error: true, message: 'Unauthorized to view this match' });
+          return;
+        }
+        
+        // Use Socket.IO 'Rooms' to isolate users by match
+        socket.join(`match:${matchId}`);
+        console.log(`User ${socket.user.id} joined match:${matchId}`);
+      } catch (err) {
+        console.error('Socket match:join error:', err);
+        socket.emit('match:error', { error: true, message: 'Failed to join match stream' });
       }
-      
-      // Use Socket.IO 'Rooms' to isolate users by match
-      socket.join(`match:${matchId}`);
-      console.log(`User ${socket.user.id} joined match:${matchId}`);
     });
 
     /**
