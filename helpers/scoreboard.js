@@ -135,29 +135,6 @@ async function getScoreboard(matchId, transaction = null) {
   };
 }
 
-async function isAuthorizedViewer(matchId, userId) {
-  const match = await db('matches').where({ id: matchId }).first();
-  if (!match) return false;
-  
-  if (String(match.created_by) === String(userId)) return true;
-  
-  const isAdmin = await db('match_admins').where({ match_id: matchId, user_id: userId }).first();
-  if (isAdmin) return true;
-  
-  const isViewer = await db('match_viewers').where({ match_id: matchId, user_id: userId }).first();
-  if (isViewer) return true;
-  
-  const isPlayer = await db('team_players')
-    .whereIn('team_id', [match.team_a_id, match.team_b_id])
-    .andWhere({ user_id: userId, is_active: true })
-    .first();
-    
-  if (isPlayer) return true;
-  
-  return false;
-}
-
 module.exports = {
-  getScoreboard,
-  isAuthorizedViewer
+  getScoreboard
 };

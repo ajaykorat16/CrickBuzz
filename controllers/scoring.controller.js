@@ -17,20 +17,8 @@ const { getScoreboard } = require('../helpers/scoreboard');
  */
 const startInnings = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
-    const userId = req.user.id;
     const { batting_team_id, bowling_team_id, striker_id, non_striker_id, bowler_id, toss_winner_team_id, toss_decision } = req.body;
-
-    const match = await db('matches')
-      .where({ id: matchId })
-      .whereNull('deleted_at')
-      .first();
-
-    if (!match) throw new ErrorHandler('Match not found', 404);
-    
-    if (String(match.created_by) !== String(userId)) {
-      const isAdmin = await db('match_admins').where({ match_id: matchId, user_id: userId }).first();
-      if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
-    }
+    const match = req.match;
     
     if (striker_id === non_striker_id) {
       throw new ErrorHandler('Striker and non-striker cannot be the same player', 400);
@@ -134,7 +122,6 @@ const startInnings = TryCatch(async (req, res, next) => {
  */
 const recordDelivery = TryCatch(async (req, res, next) => {
     const inningsId = req.params.id;
-    const userId = req.user.id;
     const data = req.body;
 
     const result = await db.transaction(async (trx) => {
@@ -142,11 +129,7 @@ const recordDelivery = TryCatch(async (req, res, next) => {
       if (!innings) throw new ErrorHandler('Innings not found', 404);
       if (innings.status === 'COMPLETED') throw new ErrorHandler('Innings already completed', 400);
 
-      const match = await trx('matches').where({ id: innings.match_id }).first();
-      if (String(match.created_by) !== String(userId)) {
-        const isAdmin = await trx('match_admins').where({ match_id: match.id, user_id: userId }).first();
-        if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
-      }
+      const match = req.match;
       
       // Strict Over Limit Validation
       if (match.overs && innings.total_legal_balls >= match.overs * 6) {
@@ -336,9 +319,6 @@ const recordDelivery = TryCatch(async (req, res, next) => {
  */
 const getLiveScoreboard = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
-    const { isAuthorizedViewer } = require('../helpers/scoreboard');
-    const authorized = await isAuthorizedViewer(matchId, req.user.id);
-    if (!authorized) throw new ErrorHandler('Unauthorized to view this match scoreboard', 403);
 
     const scoreboard = await getScoreboard(matchId);
     res.json({ success: true, data: scoreboard });
@@ -351,18 +331,13 @@ const getLiveScoreboard = TryCatch(async (req, res, next) => {
  */
 const setNextPlayers = TryCatch(async (req, res, next) => {
     const inningsId = req.params.id;
-    const userId = req.user.id;
     const { striker_id, non_striker_id, bowler_id } = req.body;
 
     const result = await db.transaction(async (trx) => {
       const innings = await trx('innings').where({ id: inningsId }).first();
       if (!innings || innings.status === 'COMPLETED') throw new ErrorHandler('Invalid innings', 400);
 
-      const match = await trx('matches').where({ id: innings.match_id }).first();
-      if (String(match.created_by) !== String(userId)) {
-        const isAdmin = await trx('match_admins').where({ match_id: match.id, user_id: userId }).first();
-        if (!isAdmin) throw new ErrorHandler('Unauthorized to score this match', 403);
-      }
+      const match = req.match;
       
       // Strict Over Limit Validation
       if (match.overs && innings.total_legal_balls >= match.overs * 6) {
@@ -436,9 +411,6 @@ const setNextPlayers = TryCatch(async (req, res, next) => {
  */
 const getScorecard = TryCatch(async (req, res, next) => {
     const matchId = req.params.id;
-    const { isAuthorizedViewer } = require('../helpers/scoreboard');
-    const authorized = await isAuthorizedViewer(matchId, req.user.id);
-    if (!authorized) throw new ErrorHandler('Unauthorized to view this match scorecard', 403);
 
     const match = await db('matches').where({ id: matchId }).first();
     if (!match) throw new ErrorHandler('Match not found', 404);
@@ -545,4 +517,108 @@ module.exports = {
   getLiveScoreboard,
   setNextPlayers,
   getScorecard
+};
+
+/**
+ * Undoes the last recorded delivery for an innings.
+ * Reverts the database state (runs, wickets, balls) and restores the crease state.
+ */
+const undoLastDelivery = TryCatch(async (req, res, next) => {
+    const inningsId = req.params.id;
+
+    const result = await db.transaction(async (trx) => {
+      const innings = await trx('innings').where({ id: inningsId }).first();
+      if (!innings) throw new ErrorHandler('Innings not found', 404);
+
+      const match = req.match;
+
+      // Find the last delivery
+      const lastDelivery = await trx('deliveries')
+        .where({ innings_id: inningsId })
+        .orderBy('delivery_number', 'desc')
+        .first();
+
+      if (!lastDelivery) {
+        throw new ErrorHandler('No deliveries found to undo', 400);
+      }
+
+      const over = await trx('overs').where({ id: lastDelivery.over_id }).first();
+
+      // Delete the delivery
+      await trx('deliveries').where({ id: lastDelivery.id }).del();
+
+      // Update the over
+      const isLegal = lastDelivery.is_legal_delivery;
+      const runsToSubtract = lastDelivery.total_runs;
+      const wicketsToSubtract = lastDelivery.is_wicket ? 1 : 0;
+      
+      const newLegalBalls = over.legal_balls - (isLegal ? 1 : 0);
+      
+      const deliveriesLeftInOver = await trx('deliveries').where({ over_id: over.id }).count({ count: '*' }).first();
+      
+      if (Number(deliveriesLeftInOver.count) === 0) {
+        // Over is completely empty now, we can delete it
+        await trx('overs').where({ id: over.id }).del();
+      } else {
+        await trx('overs').where({ id: over.id }).update({
+          runs: over.runs - runsToSubtract,
+          wickets: over.wickets - wicketsToSubtract,
+          legal_balls: newLegalBalls,
+          status: 'IN_PROGRESS'
+        });
+      }
+
+      // Update innings
+      const newTotalRuns = innings.total_runs - runsToSubtract;
+      const newTotalWickets = innings.total_wickets - wicketsToSubtract;
+      const newTotalLegalBalls = innings.total_legal_balls - (isLegal ? 1 : 0);
+      const newOvers = calculateOvers(newTotalLegalBalls);
+
+      await trx('innings').where({ id: inningsId }).update({
+        total_runs: newTotalRuns,
+        total_wickets: newTotalWickets,
+        total_legal_balls: newTotalLegalBalls,
+        overs: newOvers,
+        status: 'IN_PROGRESS',
+        completed_at: null
+      });
+
+      // Update match
+      await trx('matches').where({ id: match.id }).update({
+        status: 'LIVE',
+        winner_team_id: null,
+        result_type: null,
+        result_description: null
+      });
+
+      // Update innings state
+      const currentOver = await trx('overs').where({ innings_id: inningsId }).orderBy('over_number', 'desc').first();
+      
+      await trx('innings_state').where({ innings_id: inningsId }).update({
+        striker_id: lastDelivery.striker_id,
+        non_striker_id: lastDelivery.non_striker_id,
+        current_bowler_id: lastDelivery.bowler_id,
+        current_over_number: currentOver ? currentOver.over_number : 1,
+        current_ball_number: currentOver ? currentOver.legal_balls : 0,
+        updated_at: trx.fn.now()
+      });
+
+      // Broadcast update
+      const io = getIO();
+      const scoreboard = await getScoreboard(match.id, trx);
+      io.to(`match:${match.id}`).emit('scoreboard:update', scoreboard);
+
+      return { success: true, message: 'Last delivery undone successfully' };
+    });
+
+    res.json(result);
+});
+
+module.exports = {
+  startInnings,
+  recordDelivery,
+  getLiveScoreboard,
+  setNextPlayers,
+  getScorecard,
+  undoLastDelivery
 };

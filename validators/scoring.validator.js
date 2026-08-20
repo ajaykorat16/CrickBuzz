@@ -30,8 +30,13 @@ const setNextPlayers = [
   body('bowler_id').optional({ nullable: true }).isInt().toInt(),
 ];
 
+const undoDelivery = [
+  param('id').isInt().withMessage('Invalid innings ID').toInt()
+];
+
 module.exports = {
   startInnings,
   recordDelivery,
-  setNextPlayers
+  setNextPlayers,
+  undoDelivery
 };
