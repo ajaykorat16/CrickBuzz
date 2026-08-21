@@ -131,11 +131,11 @@ async function getScoreboard(matchId, transaction = null) {
       'deliveries.ball_number',
       'deliveries.wicket_type',
       'batter.id as batter_id',
-      'batter.name as batter_name',
+      'batter.username as batter_name',
       'bowler.id as bowler_id',
-      'bowler.name as bowler_name',
+      'bowler.username as bowler_name',
       'fielder.id as fielder_id',
-      'fielder.name as fielder_name'
+      'fielder.username as fielder_name'
     );
   
   const fall_of_wickets = [];
