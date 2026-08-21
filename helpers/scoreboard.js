@@ -2,7 +2,7 @@ const { db } = require('../config/database');
 
 async function getScoreboard(matchId, transaction = null) {
   const query = transaction || db;
-  
+
   const match = await query('matches').where({ id: matchId }).first();
   if (!match || !match.current_innings_id) return { match };
 
@@ -16,7 +16,7 @@ async function getScoreboard(matchId, transaction = null) {
   let striker = null;
   let nonStriker = null;
   let bowler = null;
-  
+
   if (state.striker_id) {
     const s = await query('users').where({ id: state.striker_id }).first();
     const stats = await query('deliveries').where({ innings_id: innings.id, striker_id: s.id })
@@ -66,18 +66,18 @@ async function getScoreboard(matchId, transaction = null) {
       .sum('is_wicket as wickets')
       .sum({ is_legal_delivery: query.raw('CASE WHEN is_legal_delivery = 1 THEN 1 ELSE 0 END') })
       .first();
-      
+
     // Count legal deliveries natively since true/false sum varies by sql dialect.
     const legalBallsRow = await query('deliveries')
       .where({ innings_id: innings.id, bowler_id: b.id, is_legal_delivery: true })
       .count('* as lb').first();
-      
+
     const totalLegalBalls = Number(legalBallsRow.lb) || 0;
     const completeOvers = Math.floor(totalLegalBalls / 6);
     const rem = totalLegalBalls % 6;
     const oversStr = `${completeOvers}.${rem}`;
     const runs = Number(stats.runs) || 0;
-    
+
     bowler = {
       id: b.id,
       name: b.username,
@@ -93,7 +93,7 @@ async function getScoreboard(matchId, transaction = null) {
     const deliveries = await query('deliveries')
       .where({ over_id: currentOver.id })
       .orderBy('delivery_number', 'asc');
-      
+
     currentOverBalls = deliveries.map(d => {
       if (d.is_wicket) return 'W';
       if (d.extra_type === 'WIDE') return `${d.extra_runs > 0 ? d.extra_runs : ''}Wd`;
@@ -101,7 +101,7 @@ async function getScoreboard(matchId, transaction = null) {
       return d.runs_off_bat.toString();
     });
   }
-  
+
   let required = null;
   if (innings.target_runs) {
     const runsNeeded = innings.target_runs - innings.total_runs;
@@ -111,12 +111,12 @@ async function getScoreboard(matchId, transaction = null) {
       target: innings.target_runs,
       runs_needed: Math.max(0, runsNeeded),
       balls_remaining: Math.max(0, ballsRemaining),
-      required_run_rate: ballsRemaining > 0 ? ((runsNeeded / ballsRemaining) * 6).toFixed(2) : 0
+      required_run_rate: (ballsRemaining > 0 && runsNeeded > 0) ? ((runsNeeded / ballsRemaining) * 6).toFixed(2) : 0
     };
   }
 
   const current_run_rate = innings.total_legal_balls > 0 ? ((innings.total_runs / innings.total_legal_balls) * 6).toFixed(2) : 0;
-  
+
   // Fall of Wickets
   const fowDataRaw = await query('deliveries')
     .join('users as batter', 'deliveries.dismissed_player_id', '=', 'batter.id')
@@ -137,32 +137,32 @@ async function getScoreboard(matchId, transaction = null) {
       'fielder.id as fielder_id',
       'fielder.username as fielder_name'
     );
-  
+
   const fall_of_wickets = [];
   // Calculate the score EXACTLY at the delivery when the wicket fell
   // Real-time clients use this to show the score timeline (e.g., 45-1, 112-2)
   for (const fow of fowDataRaw) {
-     const scoreAtWicket = await query('deliveries')
-       .where({ innings_id: innings.id })
-       .where('delivery_number', '<=', fow.delivery_number)
-       .sum('total_runs as score')
-       .first();
-       
-     const noBowlerCredit = ['RUN_OUT', 'RETIRED_HURT', 'RETIRED_OUT', 'OBSTRUCTING_THE_FIELD', 'TIMED_OUT'].includes(fow.wicket_type);
-     const displayBowlerId = noBowlerCredit ? null : fow.bowler_id;
-     const displayBowlerName = noBowlerCredit ? null : fow.bowler_name;
-       
-     fall_of_wickets.push({
-        dismissed_player_id: fow.batter_id,
-        player: { id: fow.batter_id, name: fow.batter_name },
-        score: Number(scoreAtWicket.score) || 0,
-        over: `${fow.over_number - 1}.${fow.ball_number}`,
-        wicket_type: fow.wicket_type,
-        bowler_id: displayBowlerId || null,
-        bowler: displayBowlerId ? { id: displayBowlerId, name: displayBowlerName } : null,
-        fielder_id: fow.fielder_id || null,
-        fielder: fow.fielder_id ? { id: fow.fielder_id, name: fow.fielder_name } : null
-     });
+    const scoreAtWicket = await query('deliveries')
+      .where({ innings_id: innings.id })
+      .where('delivery_number', '<=', fow.delivery_number)
+      .sum('total_runs as score')
+      .first();
+
+    const noBowlerCredit = ['RUN_OUT', 'RETIRED_HURT', 'RETIRED_OUT', 'OBSTRUCTING_THE_FIELD', 'TIMED_OUT'].includes(fow.wicket_type);
+    const displayBowlerId = noBowlerCredit ? null : fow.bowler_id;
+    const displayBowlerName = noBowlerCredit ? null : fow.bowler_name;
+
+    fall_of_wickets.push({
+      dismissed_player_id: fow.batter_id,
+      player: { id: fow.batter_id, name: fow.batter_name },
+      score: Number(scoreAtWicket.score) || 0,
+      over: `${fow.over_number - 1}.${fow.ball_number}`,
+      wicket_type: fow.wicket_type,
+      bowler_id: displayBowlerId || null,
+      bowler: displayBowlerId ? { id: displayBowlerId, name: displayBowlerName } : null,
+      fielder_id: fow.fielder_id || null,
+      fielder: fow.fielder_id ? { id: fow.fielder_id, name: fow.fielder_name } : null
+    });
   }
 
   return {
@@ -187,18 +187,18 @@ async function getScoreboard(matchId, transaction = null) {
 async function isAuthorizedViewer(matchId, userId) {
   const match = await db('matches').where({ id: matchId }).whereNull('deleted_at').first();
   if (!match) return false;
-  
+
   if (String(match.created_by) === String(userId)) return true;
   if (await db('match_admins').where({ match_id: matchId, user_id: userId }).first()) return true;
   if (await db('match_viewers').where({ match_id: matchId, user_id: userId }).first()) return true;
-  
+
   const isPlayer = await db('team_players')
     .whereIn('team_id', [match.team_a_id, match.team_b_id])
     .andWhere({ user_id: userId, is_active: true })
     .first();
-    
+
   if (isPlayer) return true;
-  
+
   return false;
 }
 
