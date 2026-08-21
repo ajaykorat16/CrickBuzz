@@ -17,8 +17,9 @@ const recordDelivery = [
   body('extra_type').optional({ nullable: true }).isIn(['WIDE', 'NO_BALL', 'BYE', 'LEG_BYE', 'PENALTY']),
   body('extra_runs').optional().isInt({ min: 0 }).toInt(),
   body('is_wicket').optional().isBoolean().toBoolean(),
-  body('wicket_type').optional({ nullable: true }).isString(),
+  body('wicket_type').optional({ nullable: true }).isIn(['BOWLED', 'CAUGHT', 'LBW', 'RUN_OUT', 'STUMPED', 'HIT_WICKET', 'RETIRED_HURT']).withMessage('Invalid wicket type'),
   body('dismissed_player_id').optional({ nullable: true }).isInt().toInt(),
+  body('fielder_id').optional({ nullable: true }).isInt().toInt(),
   body('is_four').optional().isBoolean().toBoolean(),
   body('is_six').optional().isBoolean().toBoolean(),
 ];

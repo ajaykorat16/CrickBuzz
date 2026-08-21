@@ -116,6 +116,52 @@ async function getScoreboard(matchId, transaction = null) {
   }
 
   const current_run_rate = innings.total_legal_balls > 0 ? ((innings.total_runs / innings.total_legal_balls) * 6).toFixed(2) : 0;
+  
+  // Fall of Wickets
+  const fowDataRaw = await query('deliveries')
+    .join('users as batter', 'deliveries.dismissed_player_id', '=', 'batter.id')
+    .join('overs', 'deliveries.over_id', '=', 'overs.id')
+    .leftJoin('users as bowler', 'deliveries.bowler_id', '=', 'bowler.id')
+    .leftJoin('users as fielder', 'deliveries.fielder_id', '=', 'fielder.id')
+    .where({ 'deliveries.innings_id': innings.id, 'deliveries.is_wicket': true })
+    .orderBy('deliveries.delivery_number', 'asc')
+    .select(
+      'deliveries.delivery_number',
+      'overs.over_number',
+      'deliveries.ball_number',
+      'deliveries.wicket_type',
+      'batter.id as batter_id',
+      'batter.name as batter_name',
+      'bowler.id as bowler_id',
+      'bowler.name as bowler_name',
+      'fielder.id as fielder_id',
+      'fielder.name as fielder_name'
+    );
+  
+  const fall_of_wickets = [];
+  for (const fow of fowDataRaw) {
+     const scoreAtWicket = await query('deliveries')
+       .where({ innings_id: innings.id })
+       .where('delivery_number', '<=', fow.delivery_number)
+       .sum('total_runs as score')
+       .first();
+       
+     const noBowlerCredit = ['RUN_OUT', 'RETIRED_HURT', 'RETIRED_OUT', 'OBSTRUCTING_THE_FIELD', 'TIMED_OUT'].includes(fow.wicket_type);
+     const displayBowlerId = noBowlerCredit ? null : fow.bowler_id;
+     const displayBowlerName = noBowlerCredit ? null : fow.bowler_name;
+       
+     fall_of_wickets.push({
+        dismissed_player_id: fow.batter_id,
+        player: { id: fow.batter_id, name: fow.batter_name },
+        score: Number(scoreAtWicket.score) || 0,
+        over: `${fow.over_number - 1}.${fow.ball_number}`,
+        wicket_type: fow.wicket_type,
+        bowler_id: displayBowlerId || null,
+        bowler: displayBowlerId ? { id: displayBowlerId, name: displayBowlerName } : null,
+        fielder_id: fow.fielder_id || null,
+        fielder: fow.fielder_id ? { id: fow.fielder_id, name: fow.fielder_name } : null
+     });
+  }
 
   return {
     match_id: match.id,
@@ -131,6 +177,7 @@ async function getScoreboard(matchId, transaction = null) {
     bowler,
     current_over: currentOverBalls,
     required,
+    fall_of_wickets,
     timestamp: new Date().toISOString()
   };
 }

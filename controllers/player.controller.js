@@ -82,10 +82,13 @@ const getPlayerMatchPerformance = TryCatch(async (req, res, next) => {
         if (dismissal.bowler_id) {
           bowler = await db('users').select('id', 'name', 'username').where({ id: dismissal.bowler_id }).first();
         }
+        if (dismissal.fielder_id) {
+          fielder = await db('users').select('id', 'name', 'username').where({ id: dismissal.fielder_id }).first();
+        }
         batting.dismissal = {
           type: dismissal.wicket_type,
           bowler: bowler,
-          fielder: null
+          fielder: fielder
         };
       }
     }
@@ -129,8 +132,38 @@ const getPlayerMatchPerformance = TryCatch(async (req, res, next) => {
     }
 
     // === FIELDING ===
-    // Removed because fielder_id column no longer exists.
-    // fielding stats remain played: false
+    const catches = await db('deliveries')
+      .whereIn('innings_id', inningsIds)
+      .andWhere('is_wicket', true)
+      .andWhere('wicket_type', 'CAUGHT')
+      .andWhere('fielder_id', playerId)
+      .count({ count: '*' }).first();
+      
+    const runOuts = await db('deliveries')
+      .whereIn('innings_id', inningsIds)
+      .andWhere('is_wicket', true)
+      .andWhere('wicket_type', 'RUN_OUT')
+      .andWhere('fielder_id', playerId)
+      .count({ count: '*' }).first();
+      
+    const stumpings = await db('deliveries')
+      .whereIn('innings_id', inningsIds)
+      .andWhere('is_wicket', true)
+      .andWhere('wicket_type', 'STUMPED')
+      .andWhere('fielder_id', playerId)
+      .count({ count: '*' }).first();
+      
+    const catchesCount = Number(catches.count);
+    const runOutsCount = Number(runOuts.count);
+    const stumpingsCount = Number(stumpings.count);
+
+    if (catchesCount > 0 || runOutsCount > 0 || stumpingsCount > 0) {
+      fielding.played = true;
+      fielding.catches = catchesCount;
+      fielding.run_outs = runOutsCount;
+      fielding.stumpings = stumpingsCount;
+      summary.catches = catchesCount;
+    }
   }
 
   res.json({
@@ -402,7 +435,19 @@ const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
       stats.bowling.strike_rate = stats.bowling.wickets > 0 ? (totalBowlBalls / stats.bowling.wickets).toFixed(2) : '0.00';
       
       // === Career Fielding ===
-      // Removed because fielder_id column no longer exists.
+      const fStats = await db('deliveries')
+        .whereIn('innings_id', inningsIds)
+        .andWhere('fielder_id', playerId)
+        .andWhere('is_wicket', true)
+        .select('wicket_type')
+        .count({ count: '*' })
+        .groupBy('wicket_type');
+        
+      fStats.forEach(f => {
+        if (f.wicket_type === 'CAUGHT') stats.fielding.catches = Number(f.count);
+        if (f.wicket_type === 'RUN_OUT') stats.fielding.run_outs = Number(f.count);
+        if (f.wicket_type === 'STUMPED') stats.fielding.stumpings = Number(f.count);
+      });
     }
   }
 

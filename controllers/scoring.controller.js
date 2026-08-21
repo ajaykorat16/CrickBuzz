@@ -153,9 +153,40 @@ const recordDelivery = TryCatch(async (req, res, next) => {
         is_wicket = false,
         wicket_type = null,
         dismissed_player_id = null,
+        bowler_id = null,
+        fielder_id = null,
         is_four = false,
         is_six = false
       } = data;
+      
+      const wicketTypeUpper = wicket_type ? wicket_type.toUpperCase() : null;
+
+      if (is_wicket) {
+        if (!dismissed_player_id) throw new ErrorHandler('dismissed_player_id is required when is_wicket is true', 400);
+        if (dismissed_player_id !== state.striker_id && dismissed_player_id !== state.non_striker_id) {
+          throw new ErrorHandler('The dismissed player must be the current striker or non-striker', 400);
+        }
+        if (!wicketTypeUpper) throw new ErrorHandler('wicket_type is required', 400);
+        
+        const requiresFielder = ['CAUGHT', 'RUN_OUT', 'STUMPED'].includes(wicketTypeUpper);
+        if (requiresFielder && !fielder_id) {
+          throw new ErrorHandler(`fielder_id is required for wicket type: ${wicketTypeUpper}`, 400);
+        }
+        
+        if (fielder_id) {
+          const fieldingTeamPlayers = await trx('team_players')
+            .where({ team_id: innings.bowling_team_id, is_active: true })
+            .pluck('user_id');
+          if (!fieldingTeamPlayers.includes(fielder_id)) {
+            throw new ErrorHandler('Fielder must belong to the bowling team', 400);
+          }
+        }
+        
+        // If bowler_id is provided, validate it matches the active bowler
+        if (bowler_id && bowler_id !== currentOver.bowler_id) {
+          throw new ErrorHandler('Provided bowler_id does not match the active bowler for this over', 400);
+        }
+      }
 
       const legalDelivery = isLegalDelivery(extra_type);
       const totalRunsThisBall = calculateTotalRuns(runs_off_bat, extra_type, extra_runs);
@@ -176,8 +207,9 @@ const recordDelivery = TryCatch(async (req, res, next) => {
         extra_runs,
         total_runs: totalRunsThisBall,
         extra_type,
-        wicket_type,
+        wicket_type: wicketTypeUpper,
         dismissed_player_id,
+        fielder_id: fielder_id || null,
         is_legal_delivery: legalDelivery,
         is_wicket,
         is_four,
@@ -475,11 +507,24 @@ const getScorecard = TryCatch(async (req, res, next) => {
       
       // Fall of Wickets
       const fowDataRaw = await db('deliveries')
-        .join('users', 'deliveries.dismissed_player_id', '=', 'users.id')
+        .join('users as batter', 'deliveries.dismissed_player_id', '=', 'batter.id')
         .join('overs', 'deliveries.over_id', '=', 'overs.id')
+        .leftJoin('users as bowler', 'deliveries.bowler_id', '=', 'bowler.id')
+        .leftJoin('users as fielder', 'deliveries.fielder_id', '=', 'fielder.id')
         .where({ 'deliveries.innings_id': inn.id, 'deliveries.is_wicket': true })
         .orderBy('deliveries.delivery_number', 'asc')
-        .select('users.username', 'deliveries.delivery_number', 'overs.over_number', 'deliveries.ball_number');
+        .select(
+          'deliveries.delivery_number',
+          'overs.over_number',
+          'deliveries.ball_number',
+          'deliveries.wicket_type',
+          'batter.id as batter_id',
+          'batter.name as batter_name',
+          'bowler.id as bowler_id',
+          'bowler.name as bowler_name',
+          'fielder.id as fielder_id',
+          'fielder.name as fielder_name'
+        );
       
       const fallOfWickets = [];
       for (const fow of fowDataRaw) {
@@ -489,10 +534,20 @@ const getScorecard = TryCatch(async (req, res, next) => {
            .sum('total_runs as score')
            .first();
            
+         const noBowlerCredit = ['RUN_OUT', 'RETIRED_HURT', 'RETIRED_OUT', 'OBSTRUCTING_THE_FIELD', 'TIMED_OUT'].includes(fow.wicket_type);
+         const displayBowlerId = noBowlerCredit ? null : fow.bowler_id;
+         const displayBowlerName = noBowlerCredit ? null : fow.bowler_name;
+           
          fallOfWickets.push({
-            player: fow.username,
+            dismissed_player_id: fow.batter_id,
+            player: { id: fow.batter_id, name: fow.batter_name },
             score: Number(scoreAtWicket.score) || 0,
-            over: `${fow.over_number - 1}.${fow.ball_number}`
+            over: `${fow.over_number - 1}.${fow.ball_number}`,
+            wicket_type: fow.wicket_type,
+            bowler_id: displayBowlerId || null,
+            bowler: displayBowlerId ? { id: displayBowlerId, name: displayBowlerName } : null,
+            fielder_id: fow.fielder_id || null,
+            fielder: fow.fielder_id ? { id: fow.fielder_id, name: fow.fielder_name } : null
          });
       }
       
