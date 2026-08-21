@@ -139,6 +139,8 @@ async function getScoreboard(matchId, transaction = null) {
     );
   
   const fall_of_wickets = [];
+  // Calculate the score EXACTLY at the delivery when the wicket fell
+  // Real-time clients use this to show the score timeline (e.g., 45-1, 112-2)
   for (const fow of fowDataRaw) {
      const scoreAtWicket = await query('deliveries')
        .where({ innings_id: innings.id })

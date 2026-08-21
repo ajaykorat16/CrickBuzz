@@ -162,6 +162,8 @@ const recordDelivery = TryCatch(async (req, res, next) => {
       
       const wicketTypeUpper = wicket_type ? wicket_type.toUpperCase() : null;
 
+      // Ensure data integrity for fall of wickets
+      // When a wicket occurs, we strictly require the dismissed player ID and wicket type
       if (is_wicket) {
         if (!dismissed_player_id) throw new ErrorHandler('dismissed_player_id is required when is_wicket is true', 400);
         if (dismissed_player_id !== state.striker_id && dismissed_player_id !== state.non_striker_id) {
@@ -245,6 +247,7 @@ const recordDelivery = TryCatch(async (req, res, next) => {
       }
       
       // If batting second and target is reached, match is over immediately
+      // This prevents further deliveries from being recorded after the team has already won
       if (innings.target_runs && newTotalRuns >= innings.target_runs) {
         inningsCompleted = true;
         matchCompleted = true;
@@ -282,8 +285,11 @@ const recordDelivery = TryCatch(async (req, res, next) => {
         completed_at: inningsCompleted ? trx.fn.now() : null
       });
 
+      // Handle state updates if the innings or match finished on this delivery
       if (inningsCompleted || matchCompleted) {
         const matchUpdate = { status: matchStatus };
+        
+        // If match finished, we calculate the match results based on runs and wickets
         if (winner_team_id) {
           matchUpdate.winner_team_id = winner_team_id;
           matchUpdate.result_type = result_type;
@@ -291,6 +297,8 @@ const recordDelivery = TryCatch(async (req, res, next) => {
         }
         await trx('matches').where({ id: match.id }).update(matchUpdate);
         
+        // Trigger incremental aggregation of player stats immediately when the match finishes
+        // This ensures the player_career_stats table remains perfectly up to date
         if (matchCompleted) {
            await updateMatchPlayersStats(match.id, trx);
         }
@@ -532,6 +540,8 @@ const getScorecard = TryCatch(async (req, res, next) => {
         );
       
       const fallOfWickets = [];
+      // Calculate the team's total score at the exact moment each wicket fell
+      // We do this by summing all runs up to that specific delivery_number
       for (const fow of fowDataRaw) {
          const scoreAtWicket = await db('deliveries')
            .where({ innings_id: inn.id })

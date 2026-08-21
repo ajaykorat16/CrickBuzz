@@ -293,6 +293,9 @@ const getPlayerMatchHistory = TryCatch(async (req, res, next) => {
 
 /**
  * Get player career statistics
+ * @description This API now reads exclusively from the 'player_career_stats' aggregation table. 
+ * Instead of dynamically querying thousands of deliveries (which strains the database), 
+ * it fetches the pre-aggregated O(1) stats row and calculates averages/economy on-the-fly.
  */
 const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
   const { playerId } = req.params;
@@ -300,7 +303,7 @@ const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
   const player = await db('users').where({ id: playerId }).first();
   if (!player) throw new ErrorHandler('Player not found', 404);
 
-  // Fetch from the aggregation table
+  // Fetch pre-aggregated statistics from the aggregation table (updated automatically on match end)
   const careerStats = await db('player_career_stats').where({ player_id: playerId }).first();
 
   let stats = {
@@ -335,6 +338,10 @@ const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
   };
 
   if (careerStats) {
+    // Note: We calculate ratios (averages, strike rates, economy) on-the-fly here.
+    // Storing floating point numbers in the database can lead to rounding errors over time, 
+    // so we only store raw integers (runs, balls, wickets) in 'player_career_stats'.
+
     // Calculate derived batting stats
     const outs = careerStats.batting_innings - careerStats.batting_not_outs;
     stats.batting.average = outs > 0 
