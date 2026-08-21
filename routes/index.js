@@ -13,6 +13,7 @@ const userRoutes = require('./user.routes');
 const teamRoutes = require('./team.routes');
 const matchRoutes = require('./match.routes');
 const scoringRoutes = require('./scoring.routes');
+const playerRoutes = require('./player.routes');
 
 const router = express.Router();
 
@@ -28,6 +29,7 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/teams', teamRoutes);
 router.use('/matches', matchRoutes);
+router.use('/players', playerRoutes);
 router.use('/', scoringRoutes);
 
 module.exports = router;
