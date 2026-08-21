@@ -300,159 +300,74 @@ const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
   const player = await db('users').where({ id: playerId }).first();
   if (!player) throw new ErrorHandler('Player not found', 404);
 
-  // Get all active teams for the player
-  const playerTeams = await db('team_players')
-    .where('user_id', playerId)
-    .where('is_active', true)
-    .pluck('team_id');
-
-  // Get all completed matches for the player
-  const matchPlayers = await db('matches')
-    .andWhere('status', 'COMPLETED')
-    .whereNull('deleted_at')
-    .andWhere(function () {
-      this.whereIn('team_a_id', playerTeams)
-        .orWhereIn('team_b_id', playerTeams);
-    })
-    .select('id as match_id');
-
-  const matchIds = matchPlayers.map(mp => mp.match_id);
+  // Fetch from the aggregation table
+  const careerStats = await db('player_career_stats').where({ player_id: playerId }).first();
 
   let stats = {
-    matches: matchIds.length,
+    matches: careerStats ? careerStats.matches : 0,
     batting: {
-      innings: 0,
-      runs: 0,
-      balls: 0,
-      highest_score: 0,
-      fours: 0,
-      sixes: 0,
+      innings: careerStats ? careerStats.batting_innings : 0,
+      runs: careerStats ? careerStats.batting_runs : 0,
+      balls: careerStats ? careerStats.batting_balls : 0,
+      highest_score: careerStats ? careerStats.batting_highest_score : 0,
+      fours: careerStats ? careerStats.batting_fours : 0,
+      sixes: careerStats ? careerStats.batting_sixes : 0,
       average: '0.00',
       strike_rate: '0.00',
-      not_outs: 0
+      not_outs: careerStats ? careerStats.batting_not_outs : 0
     },
     bowling: {
-      innings: 0,
+      innings: careerStats ? careerStats.bowling_innings : 0,
       overs: '0.0',
-      balls: 0,
-      runs: 0,
-      wickets: 0,
-      maidens: 0,
+      balls: careerStats ? careerStats.bowling_balls : 0,
+      runs: careerStats ? careerStats.bowling_runs : 0,
+      wickets: careerStats ? careerStats.bowling_wickets : 0,
+      maidens: careerStats ? careerStats.bowling_maidens : 0,
       economy: '0.00',
       average: '0.00',
       strike_rate: '0.00'
     },
     fielding: {
-      catches: 0,
-      run_outs: 0,
-      stumpings: 0
+      catches: careerStats ? careerStats.fielding_catches : 0,
+      run_outs: careerStats ? careerStats.fielding_run_outs : 0,
+      stumpings: careerStats ? careerStats.fielding_stumpings : 0
     }
   };
 
-  if (matchIds.length > 0) {
-    const inningsList = await db('innings').whereIn('match_id', matchIds);
-    const inningsIds = inningsList.map(i => i.id);
+  if (careerStats) {
+    // Calculate derived batting stats
+    const outs = careerStats.batting_innings - careerStats.batting_not_outs;
+    stats.batting.average = outs > 0 
+      ? (careerStats.batting_runs / outs).toFixed(2) 
+      : (careerStats.batting_runs > 0 ? careerStats.batting_runs.toFixed(2) : '0.00');
+    stats.batting.strike_rate = careerStats.batting_balls > 0 
+      ? ((careerStats.batting_runs / careerStats.batting_balls) * 100).toFixed(2) 
+      : '0.00';
 
-    if (inningsIds.length > 0) {
-      // === Career Batting ===
-      const battingByInnings = await db('deliveries')
-        .whereIn('innings_id', inningsIds)
-        .andWhere('striker_id', playerId)
-        .select('innings_id')
-        .sum('runs_off_bat as total_runs')
-        .select(db.raw('SUM(IF(is_four = 1, 1, 0)) as fours'))
-        .select(db.raw('SUM(IF(is_six = 1, 1, 0)) as sixes'))
-        .select(db.raw("SUM(IF(extra_type != 'WIDE' OR extra_type IS NULL, 1, 0)) as balls"))
-        .groupBy('innings_id');
-
-      const dismissals = await db('deliveries')
-        .whereIn('innings_id', inningsIds)
-        .andWhere('dismissed_player_id', playerId)
-        .select('innings_id');
-      const dismissedInnings = new Set(dismissals.map(d => d.innings_id));
-
-      stats.batting.innings = battingByInnings.length;
-
-      battingByInnings.forEach(inn => {
-        stats.batting.runs += Number(inn.total_runs);
-        stats.batting.balls += Number(inn.balls);
-        stats.batting.fours += Number(inn.fours);
-        stats.batting.sixes += Number(inn.sixes);
-
-        if (Number(inn.total_runs) > stats.batting.highest_score) {
-          stats.batting.highest_score = Number(inn.total_runs);
-        }
-
-        if (!dismissedInnings.has(inn.innings_id)) {
-          stats.batting.not_outs++;
-        }
-      });
-
-      const outs = stats.batting.innings - stats.batting.not_outs;
-      stats.batting.average = outs > 0 ? (stats.batting.runs / outs).toFixed(2) : (stats.batting.runs > 0 ? stats.batting.runs.toFixed(2) : '0.00');
-      stats.batting.strike_rate = stats.batting.balls > 0 ? ((stats.batting.runs / stats.batting.balls) * 100).toFixed(2) : '0.00';
-
-      // === Career Bowling ===
-      const oversByInnings = await db('overs')
-        .whereIn('innings_id', inningsIds)
-        .andWhere('bowler_id', playerId)
-        .select('innings_id')
-        .sum('runs as runs')
-        .sum('legal_balls as balls')
-        .select(db.raw('SUM(IF(legal_balls = 6 AND runs = 0, 1, 0)) as maidens'))
-        .groupBy('innings_id');
-
-      stats.bowling.innings = oversByInnings.length;
-
-      let totalBowlBalls = 0;
-      let totalBowlRuns = 0;
-      let totalMaidens = 0;
-
-      oversByInnings.forEach(inn => {
-        totalBowlBalls += Number(inn.balls);
-        totalBowlRuns += Number(inn.runs);
-        totalMaidens += Number(inn.maidens);
-      });
-
-      const bowlWickets = await db('deliveries')
-        .join('overs', 'deliveries.over_id', '=', 'overs.id')
-        .whereIn('overs.innings_id', inningsIds)
-        .andWhere('overs.bowler_id', playerId)
-        .andWhere('deliveries.is_wicket', true)
-        .whereIn('deliveries.wicket_type', ['BOWLED', 'CAUGHT', 'LBW', 'STUMPED', 'HIT_WICKET'])
-        .count({ count: '*' }).first();
-
-      stats.bowling.balls = totalBowlBalls;
-      stats.bowling.runs = totalBowlRuns;
-      stats.bowling.maidens = totalMaidens;
-      stats.bowling.wickets = Number(bowlWickets.count);
-      stats.bowling.overs = Math.floor(totalBowlBalls / 6) + '.' + (totalBowlBalls % 6);
-
-      const totalOversDec = totalBowlBalls / 6;
-      stats.bowling.economy = totalOversDec > 0 ? (totalBowlRuns / totalOversDec).toFixed(2) : '0.00';
-      stats.bowling.average = stats.bowling.wickets > 0 ? (totalBowlRuns / stats.bowling.wickets).toFixed(2) : '0.00';
-      stats.bowling.strike_rate = stats.bowling.wickets > 0 ? (totalBowlBalls / stats.bowling.wickets).toFixed(2) : '0.00';
-
-      // === Career Fielding ===
-      const fStats = await db('deliveries')
-        .whereIn('innings_id', inningsIds)
-        .andWhere('fielder_id', playerId)
-        .andWhere('is_wicket', true)
-        .select('wicket_type')
-        .count({ count: '*' })
-        .groupBy('wicket_type');
-
-      fStats.forEach(f => {
-        if (f.wicket_type === 'CAUGHT') stats.fielding.catches = Number(f.count);
-        if (f.wicket_type === 'RUN_OUT') stats.fielding.run_outs = Number(f.count);
-        if (f.wicket_type === 'STUMPED') stats.fielding.stumpings = Number(f.count);
-      });
-    }
+    // Calculate derived bowling stats
+    stats.bowling.overs = Math.floor(careerStats.bowling_balls / 6) + '.' + (careerStats.bowling_balls % 6);
+    const totalOversDec = careerStats.bowling_balls / 6;
+    stats.bowling.economy = totalOversDec > 0 
+      ? (careerStats.bowling_runs / totalOversDec).toFixed(2) 
+      : '0.00';
+    stats.bowling.average = careerStats.bowling_wickets > 0 
+      ? (careerStats.bowling_runs / careerStats.bowling_wickets).toFixed(2) 
+      : '0.00';
+    stats.bowling.strike_rate = careerStats.bowling_wickets > 0 
+      ? (careerStats.bowling_balls / careerStats.bowling_wickets).toFixed(2) 
+      : '0.00';
   }
 
   res.json({
     success: true,
-    data: stats
+    data: {
+      player: {
+        id: player.id,
+        name: player.username,
+        username: player.username
+      },
+      career: stats
+    }
   });
 });
 

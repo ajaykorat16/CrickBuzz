@@ -7,6 +7,7 @@ const {
   calculateTotalRuns,
   shouldSwapStriker
 } = require('../helpers/scoring');
+const { updateMatchPlayersStats } = require('../helpers/stats');
 const { getScoreboard } = require('../helpers/scoreboard');
 
 /**
@@ -283,12 +284,16 @@ const recordDelivery = TryCatch(async (req, res, next) => {
 
       if (inningsCompleted || matchCompleted) {
         const matchUpdate = { status: matchStatus };
-        if (matchCompleted) {
+        if (winner_team_id) {
           matchUpdate.winner_team_id = winner_team_id;
           matchUpdate.result_type = result_type;
           matchUpdate.result_description = result_description;
         }
         await trx('matches').where({ id: match.id }).update(matchUpdate);
+        
+        if (matchCompleted) {
+           await updateMatchPlayersStats(match.id, trx);
+        }
       }
 
       let nextStriker = state.striker_id;
