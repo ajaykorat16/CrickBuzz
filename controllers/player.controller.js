@@ -344,24 +344,24 @@ const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
 
     // Calculate derived batting stats
     const outs = careerStats.batting_innings - careerStats.batting_not_outs;
-    stats.batting.average = outs > 0 
-      ? (careerStats.batting_runs / outs).toFixed(2) 
+    stats.batting.average = outs > 0
+      ? (careerStats.batting_runs / outs).toFixed(2)
       : (careerStats.batting_runs > 0 ? careerStats.batting_runs.toFixed(2) : '0.00');
-    stats.batting.strike_rate = careerStats.batting_balls > 0 
-      ? ((careerStats.batting_runs / careerStats.batting_balls) * 100).toFixed(2) 
+    stats.batting.strike_rate = careerStats.batting_balls > 0
+      ? ((careerStats.batting_runs / careerStats.batting_balls) * 100).toFixed(2)
       : '0.00';
 
     // Calculate derived bowling stats
     stats.bowling.overs = Math.floor(careerStats.bowling_balls / 6) + '.' + (careerStats.bowling_balls % 6);
     const totalOversDec = careerStats.bowling_balls / 6;
-    stats.bowling.economy = totalOversDec > 0 
-      ? (careerStats.bowling_runs / totalOversDec).toFixed(2) 
+    stats.bowling.economy = totalOversDec > 0
+      ? (careerStats.bowling_runs / totalOversDec).toFixed(2)
       : '0.00';
-    stats.bowling.average = careerStats.bowling_wickets > 0 
-      ? (careerStats.bowling_runs / careerStats.bowling_wickets).toFixed(2) 
+    stats.bowling.average = careerStats.bowling_wickets > 0
+      ? (careerStats.bowling_runs / careerStats.bowling_wickets).toFixed(2)
       : '0.00';
-    stats.bowling.strike_rate = careerStats.bowling_wickets > 0 
-      ? (careerStats.bowling_balls / careerStats.bowling_wickets).toFixed(2) 
+    stats.bowling.strike_rate = careerStats.bowling_wickets > 0
+      ? (careerStats.bowling_balls / careerStats.bowling_wickets).toFixed(2)
       : '0.00';
   }
 
@@ -370,7 +370,6 @@ const getPlayerCareerStatistics = TryCatch(async (req, res, next) => {
     data: {
       player: {
         id: player.id,
-        name: player.username,
         username: player.username
       },
       career: stats
